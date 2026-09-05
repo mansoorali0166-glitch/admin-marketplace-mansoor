@@ -4829,6 +4829,7 @@ function AgentMerchantList() {
     "Balance",
     "Reset Pwd",
     "Kick",
+    merchant.status === "Suspended" ? "Unlock Account" : "Lock Account",
     "Login",
     "Logs",
     "Showcase",

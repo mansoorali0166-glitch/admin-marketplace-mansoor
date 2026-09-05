@@ -18,8 +18,9 @@ export default function App() {
   const isAgentPortal = currentPath === '/agent' || currentPath.startsWith('/agent/');
 
   useEffect(() => {
-    if (isSellerPortal && new URLSearchParams(window.location.search).has('previewMerchant')) {
-      try { setPreviewMerchant(JSON.parse(sessionStorage.getItem('marketplace-merchant-preview') || 'null')); } catch { setPreviewMerchant(null); }
+    const previewParam = isSellerPortal && new URLSearchParams(window.location.search).get('previewMerchant');
+    if (previewParam) {
+      try { setPreviewMerchant(JSON.parse(atob(decodeURIComponent(previewParam)))); } catch { setPreviewMerchant(null); }
       setAuthLoading(false);
       return;
     }
@@ -56,7 +57,7 @@ export default function App() {
 
   if (isSellerPortal) {
     return <>{(isSellerLoggedIn || previewMerchant)
-      ? <SellerPortal previewMerchant={previewMerchant} onLogout={async () => { if (previewMerchant) { sessionStorage.removeItem('marketplace-merchant-preview'); window.location.assign('/agent'); return; } await sellerSupabase.auth.signOut(); setIsSellerLoggedIn(false); }} />
+      ? <SellerPortal previewMerchant={previewMerchant} onLogout={async () => { if (previewMerchant) { window.location.assign('/agent'); return; } await sellerSupabase.auth.signOut(); setIsSellerLoggedIn(false); }} />
       : <SellerLogin onLoginSuccess={() => setIsSellerLoggedIn(true)} />}{demoBadge}</>;
   }
 

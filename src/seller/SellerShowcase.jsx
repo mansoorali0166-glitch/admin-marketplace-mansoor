@@ -14,7 +14,7 @@ const getSelections = (catalog) => {
   } catch { return catalog.slice(0, 2).map((product) => ({ id: product.id, onShelf: true })); }
 };
 
-export default function SellerShowcase({ onBack }) {
+export default function SellerShowcase({ onBack, shopLocked = false }) {
   const [catalog, setCatalog] = useState(getCatalog);
   const [selections, setSelections] = useState(() => getSelections(getCatalog()));
   const [category, setCategory] = useState('All');
@@ -71,10 +71,16 @@ export default function SellerShowcase({ onBack }) {
   </div></main>;
 
   return <main className="seller-showcase-page"><div className="seller-showcase-shell">
-    <header><button type="button" onClick={onBack}>‹</button><h1>Showcase</h1><button className="seller-add-products" type="button" onClick={() => { refreshCatalog(); setAdding(true); }}>＋ Add Products</button></header>
+    <header><button type="button" onClick={onBack}>‹</button><h1>Showcase</h1>{!shopLocked && <button className="seller-add-products" type="button" onClick={() => { refreshCatalog(); setAdding(true); }}>＋ Add Products</button>}</header>
     {notice && <div className="seller-showcase-notice">{notice}</div>}
-    <nav className="seller-shelf-tabs">{['On Shelf', 'All', 'Off Shelf'].map((item) => <button className={shelf === item ? 'active' : ''} type="button" key={item} onClick={() => setShelf(item)}>{item}</button>)}</nav>
-    <nav className="seller-showcase-categories">{categories.map((item) => <button className={category === item ? 'active' : ''} type="button" key={item} onClick={() => setCategory(item)}>{item}</button>)}</nav>
-    <section className="seller-showcase-products">{visibleProducts.map((product) => <article key={product.id}><h2>Product No: {product.sku}</h2><div className="seller-product-main"><img src={product.image} alt={product.name} /><div><strong>{product.id}</strong><span>Stock 999</span></div></div><div className="seller-product-prices"><div><strong>${product.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${product.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${(product.sellPrice-product.costPrice).toFixed(2)}</strong><span>Profit</span></div></div><button className={product.sellerOnShelf ? 'on' : 'off'} type="button" onClick={() => toggleShelf(product.id)}>◉ &nbsp; {product.sellerOnShelf ? 'ON SHELF' : 'OFF SHELF'}</button></article>)}{!visibleProducts.length && <div className="seller-showcase-empty">No products found.</div>}</section>
+    {shopLocked ? (
+      <div className="seller-showcase-empty">Your shop is locked. Products are hidden until it's unlocked.</div>
+    ) : (
+      <>
+        <nav className="seller-shelf-tabs">{['On Shelf', 'All', 'Off Shelf'].map((item) => <button className={shelf === item ? 'active' : ''} type="button" key={item} onClick={() => setShelf(item)}>{item}</button>)}</nav>
+        <nav className="seller-showcase-categories">{categories.map((item) => <button className={category === item ? 'active' : ''} type="button" key={item} onClick={() => setCategory(item)}>{item}</button>)}</nav>
+        <section className="seller-showcase-products">{visibleProducts.map((product) => <article key={product.id}><h2>Product No: {product.sku}</h2><div className="seller-product-main"><img src={product.image} alt={product.name} /><div><strong>{product.id}</strong><span>Stock 999</span></div></div><div className="seller-product-prices"><div><strong>${product.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${product.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${(product.sellPrice-product.costPrice).toFixed(2)}</strong><span>Profit</span></div></div><button className={product.sellerOnShelf ? 'on' : 'off'} type="button" onClick={() => toggleShelf(product.id)}>◉ &nbsp; {product.sellerOnShelf ? 'ON SHELF' : 'OFF SHELF'}</button></article>)}{!visibleProducts.length && <div className="seller-showcase-empty">No products found.</div>}</section>
+      </>
+    )}
   </div></main>;
 }

@@ -63,8 +63,8 @@ export default function MerchantControlModals({ client, merchant, action, onClos
   const saveRisk = (event) => { event.preventDefault(); run(() => client.from('profiles').update({ allow_login: risk.allowLogin, allow_withdraw: risk.allowWithdraw, bank_card_locked: risk.bankCardLocked }).eq('id', merchant.userId)); };
   const forceLogout = async () => { setBusy(true); setMessage(''); const { error: blockError } = await client.from('profiles').update({ allow_login: false }).eq('id', merchant.userId); const { error: logoutError } = blockError ? { error: null } : await client.rpc('force_logout_merchant', { target_user_id: merchant.userId }); setBusy(false); const error = blockError || logoutError; if (error) return setMessage(error.message); onChanged?.(); onClose(); };
   const loginPreview = () => {
-    sessionStorage.setItem('marketplace-merchant-preview', JSON.stringify(merchant));
-    window.open(`/seller?previewMerchant=${encodeURIComponent(merchant.userId)}`, '_blank', 'noopener');
+    const encoded = encodeURIComponent(btoa(JSON.stringify(merchant)));
+    window.open(`/seller?previewMerchant=${encoded}`, '_blank', 'noopener');
   };
 
   if (!merchant || !action) return null;

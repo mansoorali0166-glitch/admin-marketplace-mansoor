@@ -109,7 +109,19 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   };
   useEffect(() => {
     loadSellerData();
-    const channel = sellerId ? portalClient.channel(`seller-home-${sellerId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${sellerId}` }, loadSellerData).on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_clicks', filter: `seller_id=eq.${sellerId}` }, loadSellerData).subscribe() : null;
+    const channel = sellerId
+      ? portalClient
+          .channel(`seller-home-${sellerId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_clicks', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${sellerId}` }, (payload) => {
+            if (payload.new?.allow_login === false && !previewMerchant) {
+              portalClient.auth.signOut();
+              onLogout?.();
+            }
+          })
+          .subscribe()
+      : null;
     return () => { if (channel) portalClient.removeChannel(channel); };
   }, [sellerId, portalClient]);
   const metrics = useMemo(() => orders.reduce((result, row) => { const quantity = Number(row.quantity || 1); result.sales += Number(row.sell_price || 0) * quantity; result.profit += (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * quantity; result.quantity += quantity; return result; }, { sales: 0, profit: 0, quantity: 0 }), [orders]);
@@ -124,13 +136,13 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
     setShowNameModal(false);
   };
 
-  if (sellerView === 'messages') return <SellerMessages onBack={() => setSellerView('home')} />;
+  if (sellerView === 'messages') return <SellerMessages client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
   if (sellerView === 'wallet') return <SellerWallet client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
-  if (sellerView === 'showcase') return <SellerShowcase onBack={() => setSellerView('home')} />;
-  if (sellerView === 'orders') return <SellerOrders onBack={() => setSellerView('home')} />;
-  if (sellerView === 'invite') return <SellerInvite onBack={() => setSellerView('home')} />;
-  if (sellerView === 'feedback') return <SellerFeedback onBack={() => setSellerView('home')} />;
-  if (sellerView === 'service') return <SellerService onBack={() => setSellerView('home')} />;
+  if (sellerView === 'showcase') return <SellerShowcase client={portalClient} sellerId={sellerId} shopLocked={profile?.shop_locked === true} onBack={() => setSellerView('home')} />;
+  if (sellerView === 'orders') return <SellerOrders client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
+  if (sellerView === 'invite') return <SellerInvite client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
+  if (sellerView === 'feedback') return <SellerFeedback client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
+  if (sellerView === 'service') return <SellerService client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
 
   return (
     <main className="seller-center-page">

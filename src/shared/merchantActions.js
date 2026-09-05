@@ -14,6 +14,8 @@ const ACTIVITY_ACTIONS = new Set([
   "Click Logs",
   "Lock Shop",
   "Unlock Shop",
+  "Lock Account",
+  "Unlock Account",
   "Details",
   "Manage",
 ]);

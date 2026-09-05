@@ -9,6 +9,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [clicks, setClicks] = useState([]);
   const [profile, setProfile] = useState(null);
   const [showcaseProducts, setShowcaseProducts] = useState([]);
+  const [buyers, setBuyers] = useState([]);
   const [count, setCount] = useState('');
   const [source, setSource] = useState('');
   const [message, setMessage] = useState('');
@@ -18,20 +19,22 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [orderStatus, setOrderStatus] = useState('all');
   const [logSearch, setLogSearch] = useState('');
   const [logCategory, setLogCategory] = useState('all');
-  const [orderDraft, setOrderDraft] = useState({ product_id: '', product_name: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' });
+  const [orderDraft, setOrderDraft] = useState({ product_id: '', product_name: '', buyer_id: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' });
 
   const load = async () => {
     if (!merchant?.userId) return;
-    const [orderRes, txnRes, lockRes, clickRes, profileRes, showcaseRes] = await Promise.all([
+    const [orderRes, txnRes, lockRes, clickRes, profileRes, showcaseRes, buyersRes] = await Promise.all([
       client.from('orders').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
       client.from('wallet_transactions').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
       client.from('balance_locks').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
       client.from('merchant_clicks').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
       client.from('profiles').select('*').eq('id', merchant.userId).maybeSingle(),
       client.from('showcase_products').select('on_shelf,products(id,name,product_code,sell_price,cost_price)').eq('seller_id', merchant.userId),
+      client.from('virtual_buyers').select('*').order('name'),
     ]);
     setOrders(orderRes.data || []); setTxns(txnRes.data || []); setLocks(lockRes.data || []); setClicks(clickRes.data || []); setProfile(profileRes.data || null);
     setShowcaseProducts((showcaseRes.data || []).filter((row) => row.on_shelf && row.products).map((row) => row.products));
+    setBuyers(buyersRes.data || []);
   };
   useEffect(() => { load(); setTab(action === 'Order' ? 'Orders' : action === 'Manage' ? 'Balance' : 'Overview'); setShowOrderForm(action === 'Order'); }, [merchant?.userId, action]);
   const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
@@ -61,7 +64,18 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
       cost_price: product ? String(product.cost_price ?? '') : current.cost_price,
     }));
   };
-  const createOrder = async (event) => { event.preventDefault(); setBusy(true); const payload = { seller_id: merchant.userId, order_no: `MH${Date.now()}`, product_name: orderDraft.product_name.trim(), customer_name: orderDraft.customer_name.trim(), shipping_address: orderDraft.shipping_address.trim(), quantity: Number(orderDraft.quantity || 1), sell_price: Number(orderDraft.sell_price || 0), cost_price: Number(orderDraft.cost_price || 0), status: orderDraft.status }; const { error } = await client.from('orders').insert(payload); setBusy(false); if (error) return setMessage(error.message); setOrderDraft({ product_id: '', product_name: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' }); setShowOrderForm(false); setMessage('Order created successfully.'); await load(); onChanged?.(); };
+  const selectOrderBuyer = (buyerId) => {
+    const buyer = buyers.find((item) => String(item.id) === buyerId);
+    setOrderDraft((current) => ({
+      ...current,
+      buyer_id: buyerId,
+      customer_name: buyer?.name || '',
+      shipping_address: buyer
+        ? [buyer.address, buyer.city, buyer.state, buyer.postal, buyer.country].filter(Boolean).join(', ')
+        : current.shipping_address,
+    }));
+  };
+  const createOrder = async (event) => { event.preventDefault(); setBusy(true); const payload = { seller_id: merchant.userId, order_no: `MH${Date.now()}`, product_name: orderDraft.product_name.trim(), customer_name: orderDraft.customer_name.trim(), shipping_address: orderDraft.shipping_address.trim(), quantity: Number(orderDraft.quantity || 1), sell_price: Number(orderDraft.sell_price || 0), cost_price: Number(orderDraft.cost_price || 0), status: orderDraft.status }; const { error } = await client.from('orders').insert(payload); setBusy(false); if (error) return setMessage(error.message); setOrderDraft({ product_id: '', product_name: '', buyer_id: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' }); setShowOrderForm(false); setMessage('Order created successfully.'); await load(); onChanged?.(); };
   const updateOrderStatus = async (id, status) => { setBusy(true); const { error } = await client.from('orders').update({ status }).eq('id', id).eq('seller_id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); };
   const exportLogs = () => { const fields = ['created_at','category','action','actor','ip','device','details']; const csv = [fields.join(','), ...visibleLogs.map(row => fields.map(key => `"${String(row[key] || '').replace(/"/g,'""')}"`).join(','))].join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${merchant.name || 'seller'}-activity.csv`; link.click(); URL.revokeObjectURL(url); };
   const updateShop = async (values) => { setBusy(true); const { error } = await client.from('profiles').update(values).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); onChanged?.(); onClose(); };
@@ -72,7 +86,9 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   if (action === 'Stop Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Stop Traffic Clicks" /><p>Disable traffic generation for this merchant?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="amber" disabled={busy} onClick={() => updateShop({ traffic_enabled: false })}>Stop Clicks</button></footer></section></div>;
   if (action === 'Resume Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Resume Clicks" /><p>Resume automated click delivery for this seller?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ traffic_enabled: true })}>Confirm</button></footer></section></div>;
   if (action === 'Lock Account') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Lock Account" /><p>This seller will not be able to log in, receive orders, or manage products until unlocked.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="red" disabled={busy} onClick={() => updateShop({ allow_login: false })}>Confirm</button></footer></section></div>;
+  if (action === 'Unlock Account') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Unlock Account" /><p>This seller will be able to log in again immediately.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ allow_login: true })}>Confirm</button></footer></section></div>;
   if (action === 'Lock Shop') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Lock Shop" /><p>The seller's shop will be disabled immediately. Products will be hidden from customers, new orders will be blocked, and the seller will be signed out. They cannot access their shop until you unlock it.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="red" disabled={busy} onClick={() => updateShop({ shop_locked: true, showcase_visible: false, allow_login: false })}>Confirm</button></footer></section></div>;
+  if (action === 'Unlock Shop') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Unlock Shop" /><p>The seller's shop will be re-enabled. Products will be visible again, new orders will be allowed, and the seller will be able to log in.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ shop_locked: false, showcase_visible: true, allow_login: true })}>Confirm</button></footer></section></div>;
 
   const managing = action === 'Manage';
   const detailsDrawer = action === 'Details';
@@ -88,7 +104,11 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     {showcaseProducts.map((product) => <option key={product.id} value={product.id}>{product.name || product.product_code} · ${Number(product.sell_price || 0).toFixed(2)}</option>)}
   </select>
   {!showcaseProducts.length && <p className="activity-empty">This seller has no on-shelf products in their showcase yet.</p>}
-  <input required placeholder="Customer name" value={orderDraft.customer_name} onChange={(e)=>setOrderDraft({...orderDraft,customer_name:e.target.value})}/>
+  <select required value={orderDraft.buyer_id} onChange={(e)=>selectOrderBuyer(e.target.value)}>
+    <option value="">— Select virtual buyer —</option>
+    {buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.phone ? ` · ${buyer.phone}` : ''}</option>)}
+  </select>
+  {!buyers.length && <p className="activity-empty">No virtual buyers found. Add one under Virtual Buyers first.</p>}
   <input placeholder="Shipping address" value={orderDraft.shipping_address} onChange={(e)=>setOrderDraft({...orderDraft,shipping_address:e.target.value})}/>
   <input type="number" min="1" placeholder="Quantity" value={orderDraft.quantity} onChange={(e)=>setOrderDraft({...orderDraft,quantity:e.target.value})}/>
   <input type="number" min="0" step="0.01" required placeholder="Sell price" value={orderDraft.sell_price} onChange={(e)=>setOrderDraft({...orderDraft,sell_price:e.target.value})}/>
