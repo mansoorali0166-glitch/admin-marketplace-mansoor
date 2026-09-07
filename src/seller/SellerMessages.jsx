@@ -164,14 +164,29 @@ export default function SellerMessages({ client, sellerId, onBack }) {
       const partnerId      = item.sender_id === sellerId ? item.recipient_id : item.sender_id;
       const partnerProfile = item.sender_id === sellerId ? item.recipient : item.sender;
       const partnerName    = partnerProfile?.display_name || partnerProfile?.email || "User";
-      if (!byPartner.has(partnerId)) {
-        byPartner.set(partnerId, { partnerId, partnerName, messages: [], channel: item.channel });
+      const buyerContext =
+        item.channel === "buyer" && item.image_url?.startsWith("virtual-buyer:")
+          ? item.image_url
+          : "";
+      const threadId = `${partnerId}:${item.channel}:${buyerContext}`;
+      if (!byPartner.has(threadId)) {
+        byPartner.set(threadId, {
+          threadId,
+          partnerId,
+          partnerName,
+          messages: [],
+          channel: item.channel,
+          buyerContext: buyerContext || null,
+        });
       }
-      byPartner.get(partnerId).messages.push({
+      const thread = byPartner.get(threadId);
+      if (!thread.buyerContext && buyerContext) thread.buyerContext = buyerContext;
+      thread.messages.push({
         id:        item.id,
         mine:      item.sender_id === sellerId,
         text:      item.body,
         product:   item.product,
+        imageUrl:  item.image_url,
         date:      new Date(item.created_at).toLocaleString(),
         createdAt: item.created_at,
       });
@@ -187,7 +202,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
   const activeThread = useMemo(() => {
     if (!openThread) return null;
     const list = openThread.type === "buyer" ? buyerThreads : platformThreads;
-    return list.find((thread) => thread.partnerId === openThread.partnerId) || null;
+    return list.find((thread) => thread.threadId === openThread.threadId) || null;
   }, [openThread, buyerThreads, platformThreads]);
 
   const sendReply = async (event) => {
@@ -198,6 +213,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
       recipient_id: openThread.partnerId,
       channel:      activeThread?.channel || openThread.type,
       body:         reply.trim(),
+      image_url:    activeThread?.buyerContext || null,
     });
     if (error) { console.log("SEND REPLY ERROR:", error); return; }
     setReply("");
@@ -301,13 +317,13 @@ export default function SellerMessages({ client, sellerId, onBack }) {
               <ul className="sm-list">
                 {buyerThreads.length === 0 && <li className="sm-empty">No buyer conversations yet.</li>}
                 {buyerThreads.map((thread) => (
-                  <li key={thread.partnerId}>
+                  <li key={thread.threadId}>
                     <article
                       className="sm-thread-card"
-                      onClick={() => setOpenThread({ partnerId: thread.partnerId, type: "buyer" })}
+                      onClick={() => setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "buyer" })}
                       tabIndex={0}
                       role="button"
-                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ partnerId: thread.partnerId, type: "buyer" })}
+                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "buyer" })}
                     >
                       <Avatar name={thread.partnerName} />
                       <div className="sm-thread-info">
@@ -331,13 +347,13 @@ export default function SellerMessages({ client, sellerId, onBack }) {
               <ul className="sm-list">
                 {platformThreads.length === 0 && <li className="sm-empty">No platform messages yet.</li>}
                 {platformThreads.map((thread) => (
-                  <li key={thread.partnerId}>
+                  <li key={thread.threadId}>
                     <article
                       className="sm-thread-card"
-                      onClick={() => setOpenThread({ partnerId: thread.partnerId, type: "platform" })}
+                      onClick={() => setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "platform" })}
                       tabIndex={0}
                       role="button"
-                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ partnerId: thread.partnerId, type: "platform" })}
+                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "platform" })}
                     >
                       <Avatar name={thread.partnerName} />
                       <div className="sm-thread-info">
