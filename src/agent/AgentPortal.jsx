@@ -2336,7 +2336,7 @@ function AgentBuyerMessages() {
     const product = availableProducts.find(
       (item) => String(item.id) === form.product,
     );
-    if (!seller || !buyer || !product) return;
+    if (!seller || !buyer || !form.message.trim()) return;
     setSending(true);
     setSendError("");
     const { data: authData, error: authError } =
@@ -2375,12 +2375,11 @@ function AgentBuyerMessages() {
       seller: seller.display_name || seller.email,
       sellerId: seller.id,
       message: form.message.trim(),
-      productId: product.id,
-      product: product.name || product.product_code,
-      sku: product.sku || product.product_code,
-      price: Number(product.sell_price || 0),
-      image:
-        "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=160&q=80",
+      productId: product?.id || null,
+      product: product?.name || product?.product_code || "",
+      sku: product?.sku || product?.product_code || "",
+      price: product ? Number(product.sell_price || 0) : null,
+      image: product?.image_url || "",
       date: new Date(saved.created_at).toLocaleString("en-US", {
         month: "short",
         day: "numeric",
@@ -2395,7 +2394,8 @@ function AgentBuyerMessages() {
       (item) =>
         item.sellerId === seller.id &&
         String(item.buyerId || item.buyer) === String(buyer.id) &&
-        String(item.productId || "general") === String(product.id),
+        String(item.productId || "general") ===
+          String(product?.id || "general"),
     );
     persist(
       existingThread
@@ -2433,13 +2433,15 @@ function AgentBuyerMessages() {
               name: thread.buyer,
               phone: thread.phone,
             },
-            {
-              id: thread.productId,
-              name: thread.product,
-              sku: thread.sku,
-              sell_price: thread.price,
-              image_url: thread.image,
-            },
+            thread.productId
+              ? {
+                  id: thread.productId,
+                  name: thread.product,
+                  sku: thread.sku,
+                  sell_price: thread.price,
+                  image_url: thread.image,
+                }
+              : null,
           ),
         })
         .select("*")
@@ -2530,14 +2532,20 @@ function AgentBuyerMessages() {
               </div>
               {item.unread && <i aria-label="Unread" />}
             </div>
-            <div className="agent-buyer-product">
-              <img src={item.image} alt="" />
-              <div>
-                <strong>{item.product}</strong>
-                <span>SKU: {item.sku}</span>
-                <b>${item.price.toFixed(2)}</b>
+            {item.product ? (
+              <div className="agent-buyer-product">
+                <img src={item.image} alt="" />
+                <div>
+                  <strong>{item.product}</strong>
+                  <span>SKU: {item.sku}</span>
+                  <b>${Number(item.price || 0).toFixed(2)}</b>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="agent-buyer-general-chat">
+                General conversation · No product selected
+              </div>
+            )}
             <footer>
               <time>{item.latestDateLabel}</time>
               <button type="button" onClick={() => viewThread(item.id)}>
@@ -2605,7 +2613,9 @@ function AgentBuyerMessages() {
               </select>
             </label>
             <label>
-              Product *
+              <span className="buyer-product-label">
+                Product <small>(optional)</small>
+              </span>
               <div className="buyer-product-filter-buttons">
                 <button
                   type="button"
@@ -2619,9 +2629,9 @@ function AgentBuyerMessages() {
                 </button>
                 <button
                   type="button"
-                  className={productFilter === "all" ? "active" : ""}
+                  className={productFilter === "unordered" ? "active" : ""}
                   onClick={() => {
-                    setProductFilter("all");
+                    setProductFilter("unordered");
                     setForm({ ...form, product: "" });
                   }}
                 >
@@ -2629,17 +2639,19 @@ function AgentBuyerMessages() {
                 </button>
               </div>
               <select
-                required
                 value={form.product}
                 onChange={(event) =>
                   setForm({ ...form, product: event.target.value })
                 }
                 disabled={!form.buyer || !form.seller}
               >
-                <option value="">— Select product —</option>
+                <option value="">— No product (general conversation) —</option>
                 {availableProducts
                   .filter(
-                    (product) => productFilter === "all" || product.ordered,
+                    (product) =>
+                      productFilter === "ordered"
+                        ? product.ordered
+                        : !product.ordered,
                   )
                   .map((product) => (
                     <option key={product.id} value={product.id}>
@@ -2670,7 +2682,6 @@ function AgentBuyerMessages() {
                   sending ||
                   !form.buyer ||
                   !form.seller ||
-                  !form.product ||
                   !form.message.trim()
                 }
               >
@@ -2692,7 +2703,7 @@ function AgentBuyerMessages() {
               <div>
                 <h3>{activeThread.buyer}</h3>
                 <p>
-                  {activeThread.seller} · {activeThread.product}
+                  {activeThread.seller} · {activeThread.product || "General conversation"}
                 </p>
               </div>
               <button type="button" onClick={() => setOpenThread(null)}>

@@ -139,6 +139,16 @@
   font-size: 12px;
   color: #049a77;
 }
+.agent-buyer-general-chat {
+  margin: 10px 0 8px 50px;
+  padding: 12px 14px;
+  border: 1px dashed #b8c5d1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
 .agent-buyer-last-reply {
   margin: 8px 0 8px 50px;
   padding: 9px 12px;
@@ -227,6 +237,47 @@
   min-height: 88px;
   resize: vertical;
 }
+.buyer-product-label small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+}
+.buyer-product-filter-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+.buyer-product-filter-buttons button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease, box-shadow 0.2s ease;
+}
+.buyer-product-filter-buttons button:hover:not(.active) {
+  background: #e2e8f0;
+  color: #334155;
+}
+.buyer-product-filter-buttons button.active {
+  border-color: #149b8f;
+  background: #fff;
+  color: #0f8279;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.1);
+}
+.buyer-product-filter-buttons button:focus-visible {
+  outline: 3px solid rgba(20, 155, 143, 0.2);
+  outline-offset: 1px;
+}
 .agent-buyer-message-modal > footer {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -307,9 +358,13 @@
     width: auto;
   }
   .agent-buyer-product,
+  .agent-buyer-general-chat,
   .agent-buyer-last-reply,
   .agent-buyer-thread-list footer {
     margin-left: 0;
+  }
+  .buyer-product-filter-buttons {
+    grid-template-columns: 1fr;
   }
   .agent-buyer-thread-list footer {
     margin-top: 10px;
