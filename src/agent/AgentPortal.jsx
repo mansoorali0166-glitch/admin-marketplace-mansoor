@@ -2279,6 +2279,23 @@ function AgentBuyerMessages() {
     setThreads(next);
     localStorage.setItem("agent_buyer_messages", JSON.stringify(next));
   };
+  const buyerContextForMessage = (message) => {
+    const explicit = readBuyerMarker(message.image_url);
+    if (explicit || message.sender_id === agentUserId) return explicit;
+    const messageIndex = liveMessages.findIndex((item) => item.id === message.id);
+    for (let index = messageIndex - 1; index >= 0; index -= 1) {
+      const candidate = liveMessages[index];
+      if (
+        candidate.channel === "buyer" &&
+        candidate.sender_id === agentUserId &&
+        candidate.recipient_id === message.sender_id
+      ) {
+        const inferred = readBuyerMarker(candidate.image_url);
+        if (inferred) return inferred;
+      }
+    }
+    return null;
+  };
   const messagesForThread = (thread) =>
     thread.sellerId
       ? liveMessages.filter((message) => {
@@ -2287,7 +2304,7 @@ function AgentBuyerMessages() {
               message.recipient_id === thread.sellerId) ||
             (message.sender_id === thread.sellerId &&
               message.recipient_id === agentUserId);
-          const buyer = readBuyerMarker(message.image_url);
+          const buyer = buyerContextForMessage(message);
           return (
             participantsMatch &&
             String(buyer?.id) === String(thread.buyerId || thread.buyer) &&
@@ -2483,7 +2500,7 @@ function AgentBuyerMessages() {
             item.recipient_id === activeThread.sellerId) ||
           (item.sender_id === activeThread.sellerId &&
             item.recipient_id === agentUserId);
-        const buyer = readBuyerMarker(item.image_url);
+        const buyer = buyerContextForMessage(item);
         return (
           participantsMatch &&
           String(buyer?.id) ===

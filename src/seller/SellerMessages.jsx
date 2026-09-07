@@ -160,14 +160,20 @@ export default function SellerMessages({ client, sellerId, onBack }) {
 
   const groupIntoThreads = (rows) => {
     const byPartner = new Map();
+    const latestBuyerContext = new Map();
     rows.forEach((item) => {
       const partnerId      = item.sender_id === sellerId ? item.recipient_id : item.sender_id;
       const partnerProfile = item.sender_id === sellerId ? item.recipient : item.sender;
       const partnerName    = partnerProfile?.display_name || partnerProfile?.email || "User";
-      const buyerContext =
+      const contextKey = `${partnerId}:${item.channel}`;
+      const explicitBuyerContext =
         item.channel === "buyer" && item.image_url?.startsWith("virtual-buyer:")
           ? item.image_url
           : "";
+      if (explicitBuyerContext) latestBuyerContext.set(contextKey, explicitBuyerContext);
+      const buyerContext =
+        explicitBuyerContext ||
+        (item.channel === "buyer" ? latestBuyerContext.get(contextKey) || "" : "");
       const threadId = `${partnerId}:${item.channel}:${buyerContext}`;
       if (!byPartner.has(threadId)) {
         byPartner.set(threadId, {
