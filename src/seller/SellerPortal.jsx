@@ -101,7 +101,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
     const [profileRes, ordersRes, clicksRes] = await Promise.all([
       client.from('profiles').select('*').eq('id', id).maybeSingle(),
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
-      client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).not('source', 'like', 'adjustment:remove:%'),
+      client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).not('source', 'like', 'adjustment:remove:%').not('source', 'like', 'adjustment:stop:%'),
     ]);
     if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.display_name || shopName); }
     setOrders(ordersRes.data || []);
@@ -115,6 +115,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_clicks', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${sellerId}` }, (payload) => {
+            loadSellerData();
             if (payload.new?.allow_login === false && !previewMerchant) {
               portalClient.auth.signOut();
               onLogout?.();
@@ -178,9 +179,9 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           />
         )}
         <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
-        <section className="seller-traffic-banner"><strong>Market<span>·</span><br />Hub</strong><div>Grow with <b>Marketplace Traffic</b><br /><em>Demo</em> product exposure</div><i /></section>
+        <section className="seller-traffic-banner"><strong>Market<span>·</span><br />Hub</strong><div>{profile?.traffic_enabled === false ? <>Marketplace Traffic<br /><em>Your clicks are stopped</em></> : <>Grow with <b>Marketplace Traffic</b><br /><em>Demo</em> product exposure</>}</div><i /></section>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
-        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>Product Clicks</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
+        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
         <section className="seller-sales-chart"><h2>Total Sales</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Sales</div></section>
         <nav className="seller-help-links"><button type="button" onClick={() => setSellerView('invite')}><b>♙＋</b><span>Invite</span></button><button type="button" onClick={() => setSellerView('feedback')}><b>⌕</b><span>Feedback</span></button><button type="button" onClick={() => setSellerView('service')}><b>♧</b><span>Service</span></button></nav>
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>

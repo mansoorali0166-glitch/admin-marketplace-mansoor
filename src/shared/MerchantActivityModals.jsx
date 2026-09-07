@@ -16,6 +16,8 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [source, setSource] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadingClicks, setLoadingClicks] = useState(true);
+  const [successMessage, setSuccessMessage] = useState('');
   const [showOrderForm, setShowOrderForm] = useState(action === 'Order');
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('all');
@@ -25,6 +27,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
 
   const load = async () => {
     if (!merchant?.userId) return;
+    setLoadingClicks(true);
     const [orderRes, txnRes, lockRes, clickRes, profileRes, showcaseRes, buyersRes] = await Promise.all([
       client.from('orders').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
       client.from('wallet_transactions').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false }),
@@ -44,11 +47,17 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     } else {
       setClickCreators({});
     }
+    setLoadingClicks(false);
   };
   useEffect(() => { load(); setTab(action === 'Order' ? 'Orders' : action === 'Manage' ? 'Balance' : 'Overview'); setShowOrderForm(action === 'Order'); }, [merchant?.userId, action]);
   const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
-  const isRemovalLog = (row) => String(row.source || '').startsWith('adjustment:remove:');
-  const activeClicks = useMemo(() => clicks.filter((row) => !isRemovalLog(row)), [clicks]);
+  const adjustmentParts = (row) => {
+    const [prefix, type, amount, ...labelParts] = String(row.source || '').split(':');
+    if (prefix !== 'adjustment') return null;
+    return { type, amount: Number(amount || 0), label: decodeURIComponent(labelParts.join(':') || '') };
+  };
+  const isAuditOnlyLog = (row) => ['remove', 'stop'].includes(adjustmentParts(row)?.type);
+  const activeClicks = useMemo(() => clicks.filter((row) => !isAuditOnlyLog(row)), [clicks]);
   const totals = useMemo(() => ({ revenue: orders.reduce((sum, row) => sum + Number(row.sell_price || row.amount || 0) * Number(row.quantity || 1), 0), profit: orders.reduce((sum, row) => sum + (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * Number(row.quantity || 1), 0), completed: orders.filter((row) => normalizeStatus(row.status) === 'completed').length }), [orders]);
   const visibleOrders = useMemo(() => orders.filter((row) => {
     const haystack = [row.order_no, row.product_name, row.customer_name, row.shipping_address, row.status].join(' ').toLowerCase();
@@ -71,12 +80,14 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     if (clickAdjustment === 'remove' && numeric > activeClicks.length) return setMessage(`Only ${activeClicks.length.toLocaleString()} clicks are available to remove.`);
     setBusy(true);
     setMessage('');
+    setSuccessMessage('');
     const { data: authData } = await client.auth.getUser();
     const createdBy = authData?.user?.id || null;
     const batchTimestamp = new Date().toISOString();
     let error = null;
     if (clickAdjustment === 'add') {
-      const rows = Array.from({ length: numeric }, () => ({ seller_id: merchant.userId, source: source || actor, created_by: createdBy, created_at: batchTimestamp }));
+      const label = encodeURIComponent(source.trim() || actor);
+      const rows = Array.from({ length: numeric }, () => ({ seller_id: merchant.userId, source: `adjustment:add:${numeric}:${label}`, created_by: createdBy, created_at: batchTimestamp }));
       ({ error } = await client.from('merchant_clicks').insert(rows));
       if (!error) await client.from('profiles').update({ traffic_enabled: true }).eq('id', merchant.userId);
     } else {
@@ -91,9 +102,11 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     }
     setBusy(false);
     if (error) return setMessage(error.message);
+    setCount('');
+    setSource('');
+    setSuccessMessage(clickAdjustment === 'add' ? 'Clicks successfully added.' : 'Clicks successfully removed.');
     await load();
     onChanged?.();
-    onClose();
   };
   const selectOrderProduct = (productId) => {
     const product = showcaseProducts.find((item) => String(item.id) === productId);
@@ -120,16 +133,34 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const updateOrderStatus = async (id, status) => { setBusy(true); const { error } = await client.from('orders').update({ status }).eq('id', id).eq('seller_id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); };
   const exportLogs = () => { const fields = ['created_at','category','action','actor','ip','device','details']; const csv = [fields.join(','), ...visibleLogs.map(row => fields.map(key => `"${String(row[key] || '').replace(/"/g,'""')}"`).join(','))].join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${merchant.name || 'seller'}-activity.csv`; link.click(); URL.revokeObjectURL(url); };
   const updateShop = async (values) => { setBusy(true); const { error } = await client.from('profiles').update(values).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); onChanged?.(); onClose(); };
+  const stopClicks = async () => {
+    setBusy(true); setMessage('');
+    const { data: authData } = await client.auth.getUser();
+    const { error: profileError } = await client.from('profiles').update({ traffic_enabled: false }).eq('id', merchant.userId);
+    let error = profileError;
+    if (!error) {
+      const label = encodeURIComponent(actor);
+      ({ error } = await client.from('merchant_clicks').insert({ seller_id: merchant.userId, source: `adjustment:stop:0:${label}`, created_by: authData?.user?.id || null, created_at: new Date().toISOString() }));
+    }
+    setBusy(false);
+    if (error) return setMessage(error.message);
+    await load(); onChanged?.(); onClose();
+  };
   if (!merchant || !action) return null;
   const Header = ({ title }) => <header><div className="activity-identity"><b>{merchant.name?.[0]?.toUpperCase()}</b><div><h3>{title}</h3><p>{merchant.email}</p></div></div><button type="button" onClick={onClose}>×</button></header>;
-  if (action === 'Add Clicks') return <div className="merchant-activity-overlay"><form className="merchant-activity-modal compact" onSubmit={adjustClicks}><Header title="Adjust Traffic Clicks" /><select aria-label="Click adjustment type" value={clickAdjustment} onChange={(e) => { setClickAdjustment(e.target.value); setMessage(''); }} style={{ boxSizing: 'border-box', width: '100%', padding: 12, margin: '5px 0', border: '1px solid #dce2ea', borderRadius: 10, background: '#fff' }}><option value="add">Add clicks</option><option value="remove">Remove clicks</option></select><input type="number" min="1" max="10000" required placeholder={`Number of clicks to ${clickAdjustment}`} value={count} onChange={(e) => setCount(e.target.value)} /><input placeholder="Reason or source label (optional)" value={source} onChange={(e) => setSource(e.target.value)} />{busy && <p role="status" aria-live="polite" style={{ color: '#2563eb', fontSize: 12 }}>◌ Processing click adjustment…</p>}{message && <p className="activity-error">{message}</p>}<footer><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button disabled={busy}>{busy ? 'Processing…' : clickAdjustment === 'add' ? 'Add Clicks' : 'Remove Clicks'}</button></footer></form></div>;
+  if (action === 'Add Clicks') return <div className="merchant-activity-overlay"><form className="merchant-activity-modal compact" onSubmit={adjustClicks}><Header title="Adjust Traffic Clicks" /><select aria-label="Click adjustment type" value={clickAdjustment} onChange={(e) => { setClickAdjustment(e.target.value); setMessage(''); setSuccessMessage(''); }} style={{ boxSizing: 'border-box', width: '100%', padding: 12, margin: '5px 0', border: '1px solid #dce2ea', borderRadius: 10, background: '#fff' }}><option value="add">Add clicks</option><option value="remove">Remove clicks</option></select><input type="number" min="1" max="10000" required placeholder={`Number of clicks to ${clickAdjustment}`} value={count} onChange={(e) => { setCount(e.target.value); setSuccessMessage(''); }} /><input placeholder="Reason or source label (optional)" value={source} onChange={(e) => { setSource(e.target.value); setSuccessMessage(''); }} />{busy && <p role="status" aria-live="polite" style={{ color: '#2563eb', fontSize: 12 }}>◌ Processing click adjustment…</p>}{successMessage && <p role="status" aria-live="polite" style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 10, fontSize: 13 }}>{successMessage}</p>}{message && <p className="activity-error">{message}</p>}<footer><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button disabled={busy}>{busy ? 'Processing…' : clickAdjustment === 'add' ? 'Add Clicks' : 'Remove Clicks'}</button></footer></form></div>;
   if (action === 'Click Logs') {
     const batchMap = new Map();
     clicks.forEach((row) => {
-      if (isRemovalLog(row)) {
-        const [, , removedCount, encodedLabel = ''] = String(row.source).split(':');
-        const adjustedBy = clickCreators[row.created_by] || decodeURIComponent(encodedLabel) || 'Unknown';
-        batchMap.set(`remove-${row.id}`, { key: `remove-${row.id}`, adjustedBy, change: -Number(removedCount || 0), date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
+      const adjustment = adjustmentParts(row);
+      if (adjustment?.type === 'remove' || adjustment?.type === 'stop') {
+        const adjustedBy = clickCreators[row.created_by] || adjustment.label || 'Unknown';
+        batchMap.set(`${adjustment.type}-${row.id}`, { key: `${adjustment.type}-${row.id}`, adjustedBy, change: adjustment.type === 'stop' ? 'Stopped' : -adjustment.amount, date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
+        return;
+      }
+      if (adjustment?.type === 'add') {
+        const key = `add-${row.created_by || 'none'}-${row.created_at}`;
+        if (!batchMap.has(key)) batchMap.set(key, { key, adjustedBy: clickCreators[row.created_by] || adjustment.label || 'Unknown', change: adjustment.amount, date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
         return;
       }
       const addedBy = clickCreators[row.created_by] || row.source || 'Unknown';
@@ -140,9 +171,9 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
       batchMap.get(key).change += 1;
     });
     const batches = Array.from(batchMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-    return <div className="merchant-activity-overlay"><section className="merchant-activity-modal click-log"><Header title="Click Logs" /><div className="activity-table"><div className="activity-row head"><span>DATE</span><span>ADJUSTED BY</span><span>CHANGE</span><span>IP</span><span>DEVICE</span></div>{batches.map((batch) => <div className="activity-row" key={batch.key}><time>{new Date(batch.date).toLocaleString()}</time><span>{batch.adjustedBy}</span><b style={{ color: batch.change < 0 ? '#dc2626' : '#2563eb', background: batch.change < 0 ? '#fff1f2' : '#eef5ff' }}>{batch.change > 0 ? '+' : ''}{batch.change.toLocaleString()}</b><span>{batch.ip}</span><span>{batch.device}</span></div>)}{!batches.length && <p className="activity-empty">No click adjustment history.</p>}</div></section></div>;
+    return <div className="merchant-activity-overlay"><section className="merchant-activity-modal click-log"><Header title="Click Logs" />{loadingClicks ? <p role="status" aria-live="polite" className="activity-empty">◌ Loading click history…</p> : <div className="activity-table"><div className="activity-row head"><span>DATE</span><span>ADJUSTED BY</span><span>CHANGE</span><span>IP</span><span>DEVICE</span></div>{batches.map((batch) => { const numericChange = typeof batch.change === 'number'; return <div className="activity-row" key={batch.key}><time>{new Date(batch.date).toLocaleString()}</time><span>{batch.adjustedBy}</span><b style={{ color: numericChange && batch.change < 0 ? '#dc2626' : batch.change === 'Stopped' ? '#d97706' : '#2563eb', background: numericChange && batch.change < 0 ? '#fff1f2' : batch.change === 'Stopped' ? '#fffbeb' : '#eef5ff' }}>{numericChange ? `${batch.change > 0 ? '+' : ''}${batch.change.toLocaleString()}` : batch.change}</b><span>{batch.ip}</span><span>{batch.device}</span></div>; })}{!batches.length && <p className="activity-empty">No click adjustment history.</p>}</div>}</section></div>;
   }
-  if (action === 'Stop Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Stop Traffic Clicks" /><p>Disable traffic generation for this merchant?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="amber" disabled={busy} onClick={() => updateShop({ traffic_enabled: false })}>Stop Clicks</button></footer></section></div>;
+  if (action === 'Stop Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Stop Traffic Clicks" /><p>Disable traffic generation for this merchant?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose} disabled={busy}>Cancel</button><button className="amber" disabled={busy} onClick={stopClicks}>{busy ? 'Stopping…' : 'Stop Clicks'}</button></footer></section></div>;
   if (action === 'Resume Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Resume Clicks" /><p>Resume automated click delivery for this seller?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ traffic_enabled: true })}>Confirm</button></footer></section></div>;
   if (action === 'Lock Account') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Lock Account" /><p>This seller will not be able to log in, receive orders, or manage products until unlocked.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="red" disabled={busy} onClick={() => updateShop({ allow_login: false })}>Confirm</button></footer></section></div>;
   if (action === 'Unlock Account') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Unlock Account" /><p>This seller will be able to log in again immediately.</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ allow_login: true })}>Confirm</button></footer></section></div>;
