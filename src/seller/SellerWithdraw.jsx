@@ -24,10 +24,29 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   const [tradePassword, setTradePassword] = useState('');
   const [records, setRecords] = useState(() => [...loadSavedRecords(), ...initialRecords]);
   const [notice, setNotice] = useState('');
+  const [noticeType, setNoticeType] = useState('success');
   const [methodPickerOpen, setMethodPickerOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All');
   const [savedMethods, setSavedMethods] = useState({});
   const visibleRecords = statusFilter === 'All' ? records : records.filter((record) => record.status === statusFilter);
+  const showNotice = (message, type = 'error', duration = 3500) => {
+    setNotice(message);
+    setNoticeType(type);
+    window.setTimeout(() => setNotice(''), duration);
+  };
+  const loadSellerRestrictions = async (sellerId) => {
+    if (!sellerId) return null;
+    const { data, error } = await sellerSupabase
+      .from('profiles')
+      .select('allow_withdraw,bank_card_locked')
+      .eq('id', sellerId)
+      .maybeSingle();
+    if (error) {
+      showNotice(`Could not verify account permissions: ${error.message}`);
+      return null;
+    }
+    return data;
+  };
   const loadCloudRecords = async () => {
     const { data } = await sellerSupabase.from('withdrawals').select('*').order('created_at',{ascending:false});
     if(data?.length) setRecords(data.map((item)=>({id:String(item.id).slice(0,8).toUpperCase()+'...',dbId:item.id,amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),updated:new Date(item.updated_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
@@ -46,7 +65,22 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   };
   useEffect(() => { loadCloudRecords(); loadSavedMethods(); }, []);
 
-  const selectMethod = (selectedMethod) => {
+  const selectMethod = async (selectedMethod) => {
+    const { data: auth } = await sellerSupabase.auth.getUser();
+    const restrictions = await loadSellerRestrictions(auth?.user?.id);
+    if (!restrictions) return;
+    if (restrictions.allow_withdraw === false) {
+      setMethodPickerOpen(false);
+      showNotice('Your withdrawals have been locked. Please contact your agent.');
+      return;
+    }
+    if (selectedMethod === 'Bank Card' && restrictions.bank_card_locked) {
+      setMethod('');
+      setAccount('');
+      setMethodPickerOpen(false);
+      showNotice('Your bank card has been temporarily locked. Please contact your agent.');
+      return;
+    }
     setMethod(selectedMethod);
     setAccount(savedMethods[selectedMethod] || '');
     setMethodPickerOpen(false);
@@ -55,19 +89,32 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   const submit = async (event) => {
     event.preventDefault();
     const { data: auth } = await sellerSupabase.auth.getUser();
+    if (!auth?.user) {
+      showNotice('Your session has expired. Please sign in again.');
+      return;
+    }
+    const restrictions = await loadSellerRestrictions(auth.user.id);
+    if (!restrictions) return;
+    if (restrictions.allow_withdraw === false) {
+      showNotice('Your withdrawals have been locked. Please contact your agent.');
+      return;
+    }
+    if (method === 'Bank Card' && restrictions.bank_card_locked) {
+      showNotice('Your bank card has been temporarily locked. Please contact your agent.');
+      return;
+    }
     const { data, error } = await sellerSupabase.from('withdrawals').insert({seller_id:auth.user.id,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
-    if (error) { setNotice(`Could not submit withdrawal: ${error.message}`); window.setTimeout(() => setNotice(''), 3000); return; }
+    if (error) { showNotice(`Could not submit withdrawal: ${error.message}`); return; }
     const idLabel = data?.id != null ? String(data.id).slice(0, 8).toUpperCase() + '...' : `${Date.now().toString(16).toUpperCase().slice(-8)}...`;
     const record = { id: idLabel, dbId:data?.id,amount: Number(amount), method, account, date: new Date(data?.created_at||Date.now()).toLocaleString(), status: 'Pending' };
     setRecords((current) => [record, ...current]);
     try { const current = JSON.parse(localStorage.getItem('seller_withdrawal_requests')) || []; localStorage.setItem('seller_withdrawal_requests', JSON.stringify([record, ...current])); } catch { /* unavailable */ }
-    setAmount(''); setTradePassword(''); setNotice('Withdrawal request submitted for review.');
-    window.setTimeout(() => setNotice(''), 2200);
+    setAmount(''); setTradePassword(''); showNotice('Withdrawal request submitted for review.', 'success', 2200);
   };
 
   return <main className="seller-withdraw-page"><div className="seller-withdraw-shell">
     <header><button type="button" onClick={onBack}>‹</button><h1>{recordsOnly ? 'Withdrawal Records' : 'Withdraw'}</h1>{recordsOnly ? <button className="withdraw-header-refresh" type="button" onClick={loadCloudRecords}>Refresh</button> : <span />}</header>
-    {!recordsOnly && <>{notice && <div className="withdraw-success-notice">{notice}</div>}
+    {!recordsOnly && <>{notice && <div className={`withdraw-success-notice ${noticeType}`} role="alert">{notice}</div>}
     <div className="withdraw-info">Withdrawal requests are reviewed by our team and processed within 1–3 business days. Your balance will be held until the request is approved.</div>
     <form className="withdraw-form" onSubmit={submit}>
       <label>Withdraw Method<button className={`withdraw-method-trigger${method ? ' selected' : ''}`} type="button" onClick={() => setMethodPickerOpen(true)}><span>{method || 'Select withdraw method'}</span><span>›</span></button></label>
