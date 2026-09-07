@@ -28,7 +28,13 @@ export default function SellerOrders({ client, sellerId, onBack }) {
         costPrice: Number(item.cost_price || 0),
         quantity: Number(item.quantity || 1),
         status: item.status,
-        date: new Date(item.created_at).toLocaleDateString(),
+        date: new Date(item.created_at).toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
       })),
     );
     setLoading(false);
@@ -46,7 +52,7 @@ export default function SellerOrders({ client, sellerId, onBack }) {
     <nav>{tabs.map((tab) => <button className={activeTab === tab ? 'active' : ''} type="button" key={tab} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
     <section className="seller-order-list">{visibleOrders.map((order) => {
       const profit = order.sellPrice - order.costPrice;
-      return <article key={order.dbId}><div className="seller-order-heading"><div><span>Order No:</span><strong>{order.id}</strong></div><b className={`order-${String(order.status || '').toLowerCase().replaceAll(' ', '-')}`}>{order.status}</b></div><div className="seller-order-address"><span>⌾</span><div><strong>{order.customer}</strong><p>{order.address}</p></div></div><div className="seller-order-product">{order.productImage && <img className="seller-order-product-image" src={order.productImage} alt={order.product} />}<div><strong>{order.product}</strong><span>x{order.quantity}</span></div></div><div className="seller-order-prices"><div><strong>${order.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${order.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${profit.toFixed(2)}</strong><span>Profit</span></div></div></article>;
+      return <article key={order.dbId}><div className="seller-order-heading"><div><span>Order No:</span><strong>{order.id}</strong><time>{order.date}</time></div><b className={`order-${String(order.status || '').toLowerCase().replaceAll(' ', '-')}`}>{order.status}</b></div><div className="seller-order-address"><span>⌾</span><div><strong>{order.customer}</strong><p>{order.address}</p></div></div><div className="seller-order-product">{order.productImage && <img className="seller-order-product-image" src={order.productImage} alt={order.product} />}<div><strong>{order.product}</strong><span>x{order.quantity}</span></div></div><div className="seller-order-prices"><div><strong>${order.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${order.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${profit.toFixed(2)}</strong><span>Profit</span></div></div></article>;
     })}{!loading && !visibleOrders.length && <div className="seller-orders-empty">No {activeTab.toLowerCase()} orders found.</div>}</section>
   </div></main>;
 }
