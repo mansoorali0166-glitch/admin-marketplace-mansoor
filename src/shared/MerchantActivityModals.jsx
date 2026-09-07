@@ -12,6 +12,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [buyers, setBuyers] = useState([]);
   const [clickCreators, setClickCreators] = useState({});
   const [count, setCount] = useState('');
+  const [clickAdjustment, setClickAdjustment] = useState('add');
   const [source, setSource] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
       client.from('showcase_products').select('on_shelf,products(id,name,product_code,sell_price,cost_price)').eq('seller_id', merchant.userId),
       client.from('virtual_buyers').select('*').order('name'),
     ]);
-    setOrders(orderRes.data || []); setTxns(txnRes.data || []); setLocks(lockRes.data || []); setClicks(clickRes.data || []);console.log('CLICKS DEBUG', (clickRes.data || []).map(r => ({ id: r.id, created_at: r.created_at, created_by: r.created_by }))); setProfile(profileRes.data || null);
+    setOrders(orderRes.data || []); setTxns(txnRes.data || []); setLocks(lockRes.data || []); setClicks(clickRes.data || []); setProfile(profileRes.data || null);
     setShowcaseProducts((showcaseRes.data || []).filter((row) => row.on_shelf && row.products).map((row) => row.products));
     setBuyers(buyersRes.data || []);
     const creatorIds = [...new Set((clickRes.data || []).map((row) => row.created_by).filter(Boolean))];
@@ -46,6 +47,8 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   };
   useEffect(() => { load(); setTab(action === 'Order' ? 'Orders' : action === 'Manage' ? 'Balance' : 'Overview'); setShowOrderForm(action === 'Order'); }, [merchant?.userId, action]);
   const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+  const isRemovalLog = (row) => String(row.source || '').startsWith('adjustment:remove:');
+  const activeClicks = useMemo(() => clicks.filter((row) => !isRemovalLog(row)), [clicks]);
   const totals = useMemo(() => ({ revenue: orders.reduce((sum, row) => sum + Number(row.sell_price || row.amount || 0) * Number(row.quantity || 1), 0), profit: orders.reduce((sum, row) => sum + (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * Number(row.quantity || 1), 0), completed: orders.filter((row) => normalizeStatus(row.status) === 'completed').length }), [orders]);
   const visibleOrders = useMemo(() => orders.filter((row) => {
     const haystack = [row.order_no, row.product_name, row.customer_name, row.shipping_address, row.status].join(' ').toLowerCase();
@@ -61,7 +64,37 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     const haystack = [row.category,row.action,row.actor,row.ip,row.device,row.details].join(' ').toLowerCase();
     return (!logSearch || haystack.includes(logSearch.toLowerCase())) && (logCategory === 'all' || row.category === logCategory);
   }), [activityLogs, logSearch, logCategory]);
-  const addClicks = async (event) => { event.preventDefault(); const numeric = Math.floor(Number(count)); if (!numeric || numeric < 1 || numeric > 10000) return setMessage('Enter a click count from 1 to 10,000.'); setBusy(true); const { data: authData } = await client.auth.getUser(); const batchTimestamp = new Date().toISOString(); const rows = Array.from({ length: numeric }, () => ({ seller_id: merchant.userId, source: source || actor, created_by: authData?.user?.id || null, created_at: batchTimestamp })); const { error } = await client.from('merchant_clicks').insert(rows); if (!error) await client.from('profiles').update({ traffic_enabled: true }).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); onClose(); };
+  const adjustClicks = async (event) => {
+    event.preventDefault();
+    const numeric = Math.floor(Number(count));
+    if (!numeric || numeric < 1 || numeric > 10000) return setMessage('Enter a click count from 1 to 10,000.');
+    if (clickAdjustment === 'remove' && numeric > activeClicks.length) return setMessage(`Only ${activeClicks.length.toLocaleString()} clicks are available to remove.`);
+    setBusy(true);
+    setMessage('');
+    const { data: authData } = await client.auth.getUser();
+    const createdBy = authData?.user?.id || null;
+    const batchTimestamp = new Date().toISOString();
+    let error = null;
+    if (clickAdjustment === 'add') {
+      const rows = Array.from({ length: numeric }, () => ({ seller_id: merchant.userId, source: source || actor, created_by: createdBy, created_at: batchTimestamp }));
+      ({ error } = await client.from('merchant_clicks').insert(rows));
+      if (!error) await client.from('profiles').update({ traffic_enabled: true }).eq('id', merchant.userId);
+    } else {
+      const ids = activeClicks.slice(0, numeric).map((row) => row.id);
+      for (let index = 0; index < ids.length && !error; index += 500) {
+        ({ error } = await client.from('merchant_clicks').delete().in('id', ids.slice(index, index + 500)));
+      }
+      if (!error) {
+        const label = encodeURIComponent(source.trim() || actor);
+        ({ error } = await client.from('merchant_clicks').insert({ seller_id: merchant.userId, source: `adjustment:remove:${numeric}:${label}`, created_by: createdBy, created_at: batchTimestamp }));
+      }
+    }
+    setBusy(false);
+    if (error) return setMessage(error.message);
+    await load();
+    onChanged?.();
+    onClose();
+  };
   const selectOrderProduct = (productId) => {
     const product = showcaseProducts.find((item) => String(item.id) === productId);
     setOrderDraft((current) => ({
@@ -89,19 +122,25 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const updateShop = async (values) => { setBusy(true); const { error } = await client.from('profiles').update(values).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); onChanged?.(); onClose(); };
   if (!merchant || !action) return null;
   const Header = ({ title }) => <header><div className="activity-identity"><b>{merchant.name?.[0]?.toUpperCase()}</b><div><h3>{title}</h3><p>{merchant.email}</p></div></div><button type="button" onClick={onClose}>×</button></header>;
-  if (action === 'Add Clicks') return <div className="merchant-activity-overlay"><form className="merchant-activity-modal compact" onSubmit={addClicks}><Header title="Add Traffic Clicks" /><input type="number" min="1" max="10000" required placeholder="Number of clicks" value={count} onChange={(e) => setCount(e.target.value)} /><input placeholder="Source label (optional)" value={source} onChange={(e) => setSource(e.target.value)} />{message && <p className="activity-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button disabled={busy}>Confirm</button></footer></form></div>;
+  if (action === 'Add Clicks') return <div className="merchant-activity-overlay"><form className="merchant-activity-modal compact" onSubmit={adjustClicks}><Header title="Adjust Traffic Clicks" /><select aria-label="Click adjustment type" value={clickAdjustment} onChange={(e) => { setClickAdjustment(e.target.value); setMessage(''); }} style={{ boxSizing: 'border-box', width: '100%', padding: 12, margin: '5px 0', border: '1px solid #dce2ea', borderRadius: 10, background: '#fff' }}><option value="add">Add clicks</option><option value="remove">Remove clicks</option></select><input type="number" min="1" max="10000" required placeholder={`Number of clicks to ${clickAdjustment}`} value={count} onChange={(e) => setCount(e.target.value)} /><input placeholder="Reason or source label (optional)" value={source} onChange={(e) => setSource(e.target.value)} />{busy && <p role="status" aria-live="polite" style={{ color: '#2563eb', fontSize: 12 }}>◌ Processing click adjustment…</p>}{message && <p className="activity-error">{message}</p>}<footer><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button disabled={busy}>{busy ? 'Processing…' : clickAdjustment === 'add' ? 'Add Clicks' : 'Remove Clicks'}</button></footer></form></div>;
   if (action === 'Click Logs') {
     const batchMap = new Map();
     clicks.forEach((row) => {
+      if (isRemovalLog(row)) {
+        const [, , removedCount, encodedLabel = ''] = String(row.source).split(':');
+        const adjustedBy = clickCreators[row.created_by] || decodeURIComponent(encodedLabel) || 'Unknown';
+        batchMap.set(`remove-${row.id}`, { key: `remove-${row.id}`, adjustedBy, change: -Number(removedCount || 0), date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
+        return;
+      }
       const addedBy = clickCreators[row.created_by] || row.source || 'Unknown';
       const key = `${row.created_by || 'none'}::${row.created_at}`;
       if (!batchMap.has(key)) {
-        batchMap.set(key, { key, addedBy, count: 0, date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
+        batchMap.set(key, { key, adjustedBy: addedBy, change: 0, date: row.created_at, ip: row.ip_address || '—', device: row.device || '—' });
       }
-      batchMap.get(key).count += 1;
+      batchMap.get(key).change += 1;
     });
     const batches = Array.from(batchMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-    return <div className="merchant-activity-overlay"><section className="merchant-activity-modal click-log"><Header title="Click Logs" /><div className="activity-table"><div className="activity-row head"><span>DATE</span><span>ADDED BY</span><span>CLICKS ADDED</span><span>IP</span><span>DEVICE</span></div>{batches.map((batch) => <div className="activity-row" key={batch.key}><time>{new Date(batch.date).toLocaleString()}</time><span>{batch.addedBy}</span><b>{batch.count}</b><span>{batch.ip}</span><span>{batch.device}</span></div>)}{!batches.length && <p className="activity-empty">No click logs.</p>}</div></section></div>;
+    return <div className="merchant-activity-overlay"><section className="merchant-activity-modal click-log"><Header title="Click Logs" /><div className="activity-table"><div className="activity-row head"><span>DATE</span><span>ADJUSTED BY</span><span>CHANGE</span><span>IP</span><span>DEVICE</span></div>{batches.map((batch) => <div className="activity-row" key={batch.key}><time>{new Date(batch.date).toLocaleString()}</time><span>{batch.adjustedBy}</span><b style={{ color: batch.change < 0 ? '#dc2626' : '#2563eb', background: batch.change < 0 ? '#fff1f2' : '#eef5ff' }}>{batch.change > 0 ? '+' : ''}{batch.change.toLocaleString()}</b><span>{batch.ip}</span><span>{batch.device}</span></div>)}{!batches.length && <p className="activity-empty">No click adjustment history.</p>}</div></section></div>;
   }
   if (action === 'Stop Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Stop Traffic Clicks" /><p>Disable traffic generation for this merchant?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button className="amber" disabled={busy} onClick={() => updateShop({ traffic_enabled: false })}>Stop Clicks</button></footer></section></div>;
   if (action === 'Resume Clicks') return <div className="merchant-activity-overlay"><section className="merchant-activity-modal compact"><Header title="Resume Clicks" /><p>Resume automated click delivery for this seller?</p>{message && <p className="activity-error">{message}</p>}<footer><button onClick={onClose}>Cancel</button><button disabled={busy} onClick={() => updateShop({ traffic_enabled: true })}>Confirm</button></footer></section></div>;
@@ -112,7 +151,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
 
   const managing = action === 'Manage';
   const detailsDrawer = action === 'Details';
-  const tabs = managing ? [['Balance',txns.length],['Orders',orders.length],['Click Scripts',0],['Click Logs',clicks.length]] : [['Overview',1],['Orders',orders.length],['Txns',txns.length],['Locks',locks.length],['Clicks',clicks.length],['Info',1]];
+  const tabs = managing ? [['Balance',txns.length],['Orders',orders.length],['Click Scripts',0],['Click Logs',clicks.length]] : [['Overview',1],['Orders',orders.length],['Txns',txns.length],['Locks',locks.length],['Clicks',activeClicks.length],['Info',1]];
   return <div className={`merchant-activity-overlay ${managing ? 'manage-workspace-overlay' : ''} ${detailsDrawer ? 'merchant-details-drawer-overlay' : ''}`}><section className={`merchant-activity-modal details ${managing ? 'manage-workspace' : ''} ${detailsDrawer ? 'merchant-details-drawer' : ''}`}>{managing ? <><button type="button" className="manage-back" onClick={onClose}>← Back</button><div className="manage-merchant-header"><div><h2>{merchant.name} {profile?.traffic_enabled === false && <small>CLICKS PAUSED</small>}</h2><p>{merchant.email} · {profile?.referral_code || merchant.id}</p></div><div className="manage-action-bar"><button onClick={() => openAction?.('Balance')}>＄ Adjust Balance</button><button onClick={() => openAction?.('Reset Pwd')}>⚿ Reset Password</button><button onClick={() => openAction?.('Lock Account')}>▣ Lock Account</button><button onClick={() => openAction?.('Login')}>↪ Login as Seller</button><button onClick={() => openAction?.(profile?.traffic_enabled === false ? 'Resume Clicks' : 'Stop Clicks')}>◉ {profile?.traffic_enabled === false ? 'Resume' : 'Stop'} Clicks</button><button onClick={() => openAction?.('Add Clicks')}>⌁ Add Clicks</button><button onClick={() => setTab('Click Logs')}>〽 Click Logs</button><button className="danger" onClick={() => openAction?.('Lock Shop')}>▣ Lock Shop</button></div></div></> : <Header title={merchant.name} />}<nav>{tabs.map(([name,total]) => <button type="button" className={tab === name ? 'active' : ''} onClick={() => setTab(name)} key={name}>{name} {!managing && name !== 'Overview' && name !== 'Info' ? `(${total})` : ''}</button>)}</nav>
     {tab === 'Balance' && <div className="manage-balance"><div className="manage-stat-grid">{[['AVAILABLE BALANCE',merchant.balance],['PENDING BALANCE','$0.00'],['TOTAL EARNINGS',`$${totals.revenue.toFixed(2)}`],['WITHDRAWN','$0.00'],['FROZEN BALANCE',`$${locks.filter(x=>x.status==='Active').reduce((s,x)=>s+Number(x.amount||0),0).toFixed(2)}`]].map(([a,b])=><article key={a}><span>{a}</span><strong>{b}</strong></article>)}</div><section className="manage-bank"><h3>▱ Bank Account</h3><p>No bank account linked yet.</p></section><section className="manage-history"><header><h3>Transaction History</h3><button type="button" onClick={() => openAction?.('Balance')}>＋ Add / Deduct</button></header><SimpleRows rows={txns} empty="No transactions yet." render={(row)=><><time>{new Date(row.created_at).toLocaleString()}</time><b>{row.type}</b><strong>${Number(row.amount||0).toFixed(2)}</strong><span>{row.note||'—'}</span></>}/></section></div>}
     {tab === 'Click Scripts' && <section className="manage-scripts"><header><div><h3>Click Scripts</h3><p>Manage automated click items for this seller's store.</p></div><button type="button" onClick={() => openAction?.('Add Clicks')}>＋ Add Click Item</button></header><p>No click items for this seller yet. Add the first one to enable automated clicks.</p></section>}
@@ -138,7 +177,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
 </form>}{message && <p className="activity-message">{message}</p>}<div className="manage-table-scroll"><div className="order-management-table"><div className="order-management-row head"><span>ORDER</span><span>PRODUCT</span><span>AMOUNT</span><span>STATUS</span><span>SHIPPING</span><span>DATE</span><span>ACTIONS</span></div>{visibleOrders.map(row=><div className="order-management-row" key={row.id}><b>{row.order_no||row.id}</b><span>{row.product_name||'—'}</span><strong>${(Number(row.sell_price||0)*Number(row.quantity||1)).toFixed(2)}</strong><span>{row.status||'—'}</span><span>{row.shipping_address||'—'}</span><time>{new Date(row.created_at).toLocaleString()}</time><select value={row.status} disabled={busy} onChange={(e)=>updateOrderStatus(row.id,e.target.value)}>{['Pending Ship','Pending Receive','Shipped','Completed','Refund','Cancelled'].map(x=><option key={x}>{x}</option>)}</select></div>)}{!visibleOrders.length&&<p className="activity-empty">No orders found.</p>}</div></div></div>} 
     {tab === 'Txns' && <SimpleRows rows={txns} empty="No transactions found." render={(row)=><><b>{row.type}</b><span>{row.note || '—'}</span><strong>${Number(row.amount||0).toFixed(2)}</strong><time>{new Date(row.created_at).toLocaleString()}</time></>}/>} 
     {tab === 'Locks' && <SimpleRows rows={locks} empty="No balance locks." render={(row)=><><b>${Number(row.amount||0).toFixed(2)}</b><span>{row.reason}</span><span>{row.status}</span><time>{new Date(row.created_at).toLocaleString()}</time></>}/>} 
-    {tab === 'Clicks' && <div className="activity-table"><div className="activity-row head"><span>DATE & TIME</span><span>IP</span><span>DEVICE</span><span>SOURCE</span></div>{clicks.map(row=><div className="activity-row" key={row.id}><time>{new Date(row.created_at).toLocaleString()}</time><span>{row.ip_address||'—'}</span><span>{row.device||'—'}</span><b>{row.source||'click'}</b></div>)}</div>}
+    {tab === 'Clicks' && <div className="activity-table"><div className="activity-row head"><span>DATE & TIME</span><span>IP</span><span>DEVICE</span><span>SOURCE</span></div>{activeClicks.map(row=><div className="activity-row" key={row.id}><time>{new Date(row.created_at).toLocaleString()}</time><span>{row.ip_address||'—'}</span><span>{row.device||'—'}</span><b>{row.source||'click'}</b></div>)}</div>}
     {tab === 'Info' && <div className="profile-info"><h4>PROFILE DETAILS</h4>{[['Store Name',merchant.name],['Email',merchant.email],['User ID',merchant.userId],['Referral Code',profile?.referral_code || merchant.id],['Assigned Agent',profile?.agent_id || '—'],['Credit Score',profile?.credit_score ?? merchant.credit],['Click Count',clicks.length],['Remark',profile?.merchant_remark || '—'],['Registered',profile?.created_at ? new Date(profile.created_at).toLocaleString() : '—']].map(([a,b])=><p key={a}><span>{a}</span><strong>{b}</strong></p>)}</div>}
   </section></div>;
 }

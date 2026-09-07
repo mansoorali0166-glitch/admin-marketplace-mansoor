@@ -101,7 +101,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
     const [profileRes, ordersRes, clicksRes] = await Promise.all([
       client.from('profiles').select('*').eq('id', id).maybeSingle(),
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
-      client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id),
+      client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).not('source', 'like', 'adjustment:remove:%'),
     ]);
     if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.display_name || shopName); }
     setOrders(ordersRes.data || []);
