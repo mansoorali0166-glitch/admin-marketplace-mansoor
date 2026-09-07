@@ -1,1 +1,434 @@
-.agent-buyer-messages-page{padding:30px 28px 60px;color:#101827}.agent-buyer-messages-page>header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}.agent-buyer-messages-page h2{margin:0 0 6px;font-size:24px}.agent-buyer-messages-page>header p{margin:0;color:#93a0b8}.agent-buyer-messages-page>header>button,.agent-buyer-thread-list footer button{border:0;border-radius:8px;background:#149b8f;color:white;padding:11px 18px;font-weight:700}.agent-buyer-message-tools{display:flex;align-items:center;gap:12px;margin-bottom:16px}.agent-buyer-message-tools label{display:flex;align-items:center;gap:10px;width:min(340px,100%);height:44px;padding:0 14px;border:1px solid #dde3eb;border-radius:8px;background:white;color:#9aa6b9}.agent-buyer-message-tools input{border:0;outline:0;width:100%;font:inherit}.agent-buyer-message-tools button{height:44px;border:1px solid #dde3eb;border-radius:8px;background:white;padding:0 16px;color:#475569}.agent-buyer-message-tools button:disabled{opacity:.55}.agent-buyer-thread-list{display:grid;gap:12px}.agent-buyer-thread-list>article{position:relative;border:1px solid #dce3e9;border-radius:12px;background:white;padding:16px}.agent-buyer-thread-list>article.unread{border-color:#42d2c1;box-shadow:0 0 0 1px #d8faf5 inset}.agent-buyer-thread-title{display:flex;gap:12px;align-items:flex-start}.agent-buyer-thread-title>b{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#cff9f2;color:#078f81}.agent-buyer-thread-title>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.agent-buyer-thread-title small,.agent-buyer-thread-title span{font-size:12px;color:#98a5b8}.agent-buyer-thread-title p{width:100%;margin:3px 0 2px;font-size:14px}.agent-buyer-thread-title i{width:8px;height:8px;border-radius:50%;background:#13a893;margin:8px}.agent-buyer-product{display:flex;align-items:center;gap:12px;margin:10px 0 8px 50px;padding:10px;border-radius:8px;background:#f7f9fa}.agent-buyer-product img{width:46px;height:46px;border-radius:6px;object-fit:cover}.agent-buyer-product div{display:grid;gap:2px}.agent-buyer-product span{font-size:11px;color:#9aa6b9}.agent-buyer-product b{font-size:12px;color:#049a77}.agent-buyer-last-reply{margin:8px 0 8px 50px;padding:9px 12px;border-radius:8px;background:#f1f5f7;display:grid;gap:3px;font-size:12px}.agent-buyer-last-reply time{color:#9ba8b8}.agent-buyer-thread-list footer{display:flex;justify-content:space-between;align-items:center;margin-left:50px}.agent-buyer-thread-list footer time{font-size:11px;color:#9aa6b9}.agent-buyer-thread-list footer button{padding:8px 13px}.agent-buyer-message-empty{padding:70px;text-align:center;border:1px solid #dde3eb;border-radius:12px;background:white;color:#9aa6b9}.agent-buyer-message-overlay{position:fixed;z-index:80;inset:0;background:#0f172a70;display:grid;place-items:center;padding:20px}.agent-buyer-message-modal,.agent-buyer-chat-modal{width:min(520px,100%);border-radius:18px;background:white;padding:22px;box-shadow:0 25px 60px #0f172a35}.agent-buyer-message-modal>header,.agent-buyer-chat-modal>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.agent-buyer-message-modal h3,.agent-buyer-chat-modal h3{margin:0}.agent-buyer-message-modal header button,.agent-buyer-chat-modal header button{border:0;background:none;font-size:22px;color:#94a0b1}.agent-buyer-message-modal label{display:grid;gap:7px;margin-bottom:16px;color:#667085;font-size:13px;font-weight:600}.agent-buyer-message-modal select,.agent-buyer-message-modal textarea{border:1px solid #d9e0e8;border-radius:8px;padding:12px;font:inherit;background:white}.agent-buyer-message-modal textarea{min-height:88px;resize:vertical}.agent-buyer-message-modal>footer{display:grid;grid-template-columns:1fr 1fr;gap:10px}.agent-buyer-message-modal>footer button,.agent-buyer-chat-modal form button{border:1px solid #dce2e8;border-radius:9px;padding:12px;background:white;font-weight:700}.agent-buyer-message-modal>footer button:last-child,.agent-buyer-chat-modal form button{background:#149b8f;color:white;border-color:#149b8f}.agent-buyer-message-modal button:disabled,.agent-buyer-chat-modal button:disabled{opacity:.45}.agent-buyer-chat-modal header p{margin:5px 0 0;color:#96a2b2}.agent-buyer-chat-stream{max-height:380px;overflow:auto;padding:8px;display:grid;gap:10px}.agent-buyer-chat-stream article{max-width:80%;padding:11px 13px;border-radius:12px;background:#f1f4f6}.agent-buyer-chat-stream article.reply{justify-self:end;background:#dff8f4}.agent-buyer-chat-stream p{margin:4px 0}.agent-buyer-chat-stream time{font-size:10px;color:#8e9aac}.agent-buyer-chat-modal form{display:flex;gap:9px;border-top:1px solid #e8edf1;margin-top:12px;padding-top:14px}.agent-buyer-chat-modal form input{flex:1;border:1px solid #dce2e8;border-radius:9px;padding:12px;font:inherit}@media(max-width:700px){.agent-buyer-messages-page{padding:20px 14px}.agent-buyer-messages-page>header{gap:12px}.agent-buyer-message-tools{align-items:stretch;flex-direction:column}.agent-buyer-message-tools label{width:auto}.agent-buyer-product,.agent-buyer-last-reply,.agent-buyer-thread-list footer{margin-left:0}.agent-buyer-thread-list footer{margin-top:10px}}
+.agent-buyer-messages-page {
+  padding: 30px 28px 60px;
+  color: #101827;
+}
+.agent-buyer-messages-page > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+.agent-buyer-messages-page h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+.agent-buyer-messages-page > header p {
+  margin: 0;
+  color: #93a0b8;
+}
+.agent-buyer-messages-page > header > button,
+.agent-buyer-thread-list footer button {
+  border: 0;
+  border-radius: 8px;
+  background: #149b8f;
+  color: white;
+  padding: 11px 18px;
+  font-weight: 700;
+}
+.agent-buyer-message-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.agent-buyer-message-tools label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(340px, 100%);
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: white;
+  color: #9aa6b9;
+}
+.agent-buyer-message-tools input {
+  border: 0;
+  outline: 0;
+  width: 100%;
+  font: inherit;
+}
+.agent-buyer-message-tools button {
+  height: 44px;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  background: white;
+  padding: 0 16px;
+  color: #475569;
+}
+.agent-buyer-message-tools button:disabled {
+  opacity: 0.55;
+}
+.agent-buyer-thread-list {
+  display: grid;
+  gap: 12px;
+}
+.agent-buyer-thread-list > article {
+  position: relative;
+  border: 1px solid #dce3e9;
+  border-radius: 12px;
+  background: white;
+  padding: 16px;
+}
+.agent-buyer-thread-list > article.unread {
+  border-color: #42d2c1;
+  box-shadow: 0 0 0 1px #d8faf5 inset;
+}
+.agent-buyer-thread-title {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.agent-buyer-thread-title > b {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #cff9f2;
+  color: #078f81;
+}
+.agent-buyer-thread-title > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.agent-buyer-thread-title small,
+.agent-buyer-thread-title span {
+  font-size: 12px;
+  color: #98a5b8;
+}
+.agent-buyer-thread-title p {
+  width: 100%;
+  margin: 3px 0 2px;
+  font-size: 14px;
+}
+.agent-buyer-thread-title i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #13a893;
+  margin: 8px;
+}
+.agent-buyer-product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 8px 50px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f7f9fa;
+}
+.agent-buyer-product img {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.agent-buyer-product div {
+  display: grid;
+  gap: 2px;
+}
+.agent-buyer-product span {
+  font-size: 11px;
+  color: #9aa6b9;
+}
+.agent-buyer-product b {
+  font-size: 12px;
+  color: #049a77;
+}
+.agent-buyer-last-reply {
+  margin: 8px 0 8px 50px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f1f5f7;
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.agent-buyer-last-reply time {
+  color: #9ba8b8;
+}
+.agent-buyer-thread-list footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-left: 50px;
+}
+.agent-buyer-thread-list footer time {
+  font-size: 11px;
+  color: #9aa6b9;
+}
+.agent-buyer-thread-list footer button {
+  padding: 8px 13px;
+}
+.agent-buyer-message-empty {
+  padding: 70px;
+  text-align: center;
+  border: 1px solid #dde3eb;
+  border-radius: 12px;
+  background: white;
+  color: #9aa6b9;
+}
+.agent-buyer-message-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: #0f172a70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.agent-buyer-message-modal,
+.agent-buyer-chat-modal {
+  width: min(520px, 100%);
+  border-radius: 18px;
+  background: white;
+  padding: 22px;
+  box-shadow: 0 25px 60px #0f172a35;
+}
+.agent-buyer-message-modal > header,
+.agent-buyer-chat-modal > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.agent-buyer-message-modal h3,
+.agent-buyer-chat-modal h3 {
+  margin: 0;
+}
+.agent-buyer-message-modal header button,
+.agent-buyer-chat-modal header button {
+  border: 0;
+  background: none;
+  font-size: 22px;
+  color: #94a0b1;
+}
+.agent-buyer-message-modal label {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+}
+.agent-buyer-message-modal select,
+.agent-buyer-message-modal textarea {
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+  background: white;
+}
+.agent-buyer-message-modal textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.agent-buyer-message-modal > footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.agent-buyer-message-modal > footer button,
+.agent-buyer-chat-modal form button {
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  padding: 12px;
+  background: white;
+  font-weight: 700;
+}
+.agent-buyer-message-modal > footer button:last-child,
+.agent-buyer-chat-modal form button {
+  background: #149b8f;
+  color: white;
+  border-color: #149b8f;
+}
+.agent-buyer-message-modal button:disabled,
+.agent-buyer-chat-modal button:disabled {
+  opacity: 0.45;
+}
+.agent-buyer-chat-modal header p {
+  margin: 5px 0 0;
+  color: #96a2b2;
+}
+.agent-buyer-chat-stream {
+  max-height: 380px;
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  gap: 10px;
+}
+.agent-buyer-chat-stream article {
+  max-width: 80%;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #f1f4f6;
+}
+.agent-buyer-chat-stream article.reply {
+  justify-self: end;
+  background: #dff8f4;
+}
+.agent-buyer-chat-stream p {
+  margin: 4px 0;
+}
+.agent-buyer-chat-stream time {
+  font-size: 10px;
+  color: #8e9aac;
+}
+.agent-buyer-chat-modal form {
+  display: flex;
+  gap: 9px;
+  border-top: 1px solid #e8edf1;
+  margin-top: 12px;
+  padding-top: 14px;
+}
+.agent-buyer-chat-modal form input {
+  flex: 1;
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  padding: 12px;
+  font: inherit;
+}
+@media (max-width: 700px) {
+  .agent-buyer-messages-page {
+    padding: 20px 14px;
+  }
+  .agent-buyer-messages-page > header {
+    gap: 12px;
+  }
+  .agent-buyer-message-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .agent-buyer-message-tools label {
+    width: auto;
+  }
+  .agent-buyer-product,
+  .agent-buyer-last-reply,
+  .agent-buyer-thread-list footer {
+    margin-left: 0;
+  }
+  .agent-buyer-thread-list footer {
+    margin-top: 10px;
+  }
+}
+
+/* =========================
+   TOP NEW MESSAGE FORM
+   ========================= */
+
+.agent-chat-new {
+  display: grid;
+  grid-template-columns: 255px minmax(0, 1fr) 120px;
+  grid-template-rows: auto auto;
+  gap: 14px 12px;
+
+  margin: 26px 0 34px;
+  padding: 22px 18px 18px;
+
+  border: 1px solid #dfe6ed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+/* NEW MESSAGE */
+.agent-chat-new > small:first-child {
+  grid-column: 1 / -1;
+
+  margin: 0;
+
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Merchant + Product */
+.agent-chat-new > select {
+  width: 100%;
+  height: 48px;
+  min-width: 0;
+
+  padding: 0 14px;
+
+  border: 1px solid #dfe6ed;
+  border-radius: 9px;
+
+  background: #fff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 15px;
+
+  outline: none;
+  cursor: pointer;
+}
+
+/* Message */
+.agent-chat-new .agent-chat-message-input {
+  grid-column: 3;
+  grid-row: 2 / span 2;
+
+  width: 100%;
+  min-width: 0;
+  height: 66px;
+
+  padding: 10px 12px;
+
+  border: 1px solid #dfe6ed;
+  border-radius: 8px;
+
+  background: #fff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 14px;
+
+  outline: none;
+  resize: vertical;
+}
+
+/* Send */
+.agent-chat-new > button {
+  grid-column: 1;
+  grid-row: 3;
+
+  width: 255px;
+  height: 42px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: #8ed3cf;
+  color: #fff;
+
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.agent-chat-new > button:hover {
+  background: #72c5c0;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  .agent-chat-new {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 12px;
+  }
+
+  .agent-chat-new > select,
+  .agent-chat-new .agent-chat-message-input,
+  .agent-chat-new > button {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+  }
+}

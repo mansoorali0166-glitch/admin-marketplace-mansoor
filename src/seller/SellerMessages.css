@@ -1,1 +1,612 @@
-.seller-messages-page{min-height:100vh;background:#fff;color:#0f172a}.seller-messages-shell{width:min(960px,100%);margin:0 auto;padding:0 20px 40px}.seller-messages-shell>header{height:70px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:1px solid #eef2f6}.seller-messages-shell>header h1{margin:0;font-size:20px}.seller-messages-shell>header button{justify-self:start;border:0;background:transparent;color:#475569;font-size:36px;cursor:pointer}.seller-message-tabs{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #eef2f6}.seller-message-tabs button{height:51px;border:0;border-bottom:2px solid transparent;background:transparent;color:#475569;font:inherit;font-size:14px;cursor:pointer}.seller-message-tabs button.active{border-bottom-color:#fb3c5c;color:#fb3c5c}.seller-announcement-list article,.seller-notice-list article{min-height:96px;display:flex;justify-content:space-between;gap:20px;padding:24px 20px;border-bottom:1px solid #eef2f6}.seller-announcement-list strong,.seller-notice-list strong{font-size:16px}.seller-announcement-list p,.seller-notice-list p{margin:12px 0 0;color:#64748b;font-size:13px}.seller-announcement-list time,.seller-notice-list time,.buyer-thread-list time,.platform-message-list time{color:#94a3b8;font-size:11px;white-space:nowrap}.seller-notice-list article{position:relative}.seller-notice-list article>div{flex:1}.seller-notice-list article>div button{margin-top:12px;border:0;background:transparent;color:#2563eb;font:inherit;font-size:12px;cursor:pointer}.seller-notice-list article>b{color:#cbd5e1;font-size:24px}.buyer-thread-list>article{padding:18px 20px 24px;border-bottom:1px solid #eef2f6}.buyer-product{display:flex;align-items:center;gap:15px;padding:14px;border:1px solid #e5e7eb;border-radius:15px;box-shadow:0 1px 3px rgba(15,23,42,.08)}.buyer-product-image{width:58px;height:58px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#111827;color:#fff;font-size:22px}.buyer-product>div:last-child{display:flex;flex-direction:column;gap:5px}.buyer-product strong{font-size:14px}.buyer-product small{color:#94a3b8;font-size:10px}.buyer-product b{color:#fb3c5c;font-size:14px}.buyer-message{display:flex;align-items:flex-start;gap:12px;margin-top:14px}.buyer-message>span{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#f1f5f9;color:#64748b}.buyer-message>div>strong{font-size:13px}.buyer-message p{width:max-content;max-width:520px;margin:6px 0;padding:15px 20px;border-radius:0 18px 18px 18px;background:#f8fafc;font-size:15px}.seller-reply{margin:12px 0 12px 52px;padding:14px;border:1px solid #fecdd3;border-radius:0 14px 14px;background:#fff1f2;color:#e11d48}.seller-reply strong{font-size:11px}.seller-reply p{margin:5px 0 0;font-size:12px}.buyer-reply-btn,.platform-message-list article button{height:36px;margin:13px 0 0 52px;padding:0 17px;border:0;border-radius:20px;background:#fb3c5c;color:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.platform-message-list article{display:flex;gap:14px;padding:24px 18px;border-bottom:1px solid #eef2f6}.platform-avatar{width:45px;height:45px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:50%;background:#0f172a;color:#fff;font-size:12px;font-weight:700}.platform-message-list article>div:last-child{position:relative;flex:1}.platform-message-list strong{font-size:13px}.platform-message-list time{float:right}.platform-message-list p{margin:8px 0;padding:18px;border-radius:0 18px 18px;background:#f1f3f6;font-size:15px}.platform-message-list article button{margin:5px 0 0;background:#0f172a}.seller-reply-overlay{position:fixed;z-index:1300;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.42)}.seller-reply-overlay form{width:min(500px,100%);padding:22px;border-radius:18px;background:#fff}.seller-reply-overlay form>div{display:flex;align-items:center;justify-content:space-between}.seller-reply-overlay h2{margin:0;font-size:18px}.seller-reply-overlay form>div button{border:0;background:transparent;color:#94a3b8;font-size:24px;cursor:pointer}.seller-reply-overlay textarea{width:100%;height:110px;margin:20px 0 12px;padding:12px;border:1px solid #dfe4ea;border-radius:10px;outline:0;resize:vertical}.seller-reply-overlay form>button{width:100%;height:44px;border:0;border-radius:9px;background:#fb3c5c;color:#fff;font-weight:700;cursor:pointer}@media(max-width:650px){.seller-messages-shell{padding:0 12px 30px}.seller-message-tabs{overflow-x:auto;display:flex}.seller-message-tabs button{min-width:125px;flex:1}.seller-announcement-list article,.seller-notice-list article{padding:18px 8px}.seller-announcement-list time,.seller-notice-list time{font-size:9px}.buyer-thread-list>article{padding:15px 5px 20px}.buyer-message p{max-width:240px}.platform-message-list article{padding:20px 5px}}
+﻿/* ============================================================
+   SellerMessages — Professional Messaging UI
+   Color system:
+     Primary:  #fb3c5c
+     Dark:     #0f172a
+     Muted:    #64748b / #94a3b8
+     BG:       #fff
+     Light BG: #f8fafc
+   ============================================================ */
+
+/* ── Root ───────────────────────────────────────────────────── */
+.sm-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #0f172a;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.sm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.sm-header-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.sm-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.sm-back-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.sm-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.sm-tab {
+  padding: 12px 4px;
+  border: none;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.sm-tab:hover {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.sm-tab--active {
+  color: #fb3c5c;
+  border-bottom-color: #fb3c5c;
+  font-weight: 600;
+}
+
+/* ── Body scroll area ───────────────────────────────────────── */
+.sm-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  background: #f8fafc;
+}
+
+/* ── Shared list reset ──────────────────────────────────────── */
+.sm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+}
+
+/* ── Empty + Loading states ─────────────────────────────────── */
+.sm-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.sm-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 64px 24px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.sm-spinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f1f5f9;
+  border-top-color: #fb3c5c;
+  border-radius: 50%;
+  animation: sm-spin 0.75s linear infinite;
+}
+
+@keyframes sm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Avatar ─────────────────────────────────────────────────── */
+.sm-avatar {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ── Thread cards (Buyer / Platform) ───────────────────────── */
+.sm-thread-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background 0.12s;
+  background: #fff;
+  outline: none;
+}
+
+.sm-thread-card:hover,
+.sm-thread-card:focus-visible {
+  background: #f8fafc;
+}
+
+.sm-thread-card:active {
+  background: #f1f5f9;
+}
+
+.sm-thread-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sm-thread-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.sm-thread-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-thread-time {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.sm-thread-preview {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Announcements ──────────────────────────────────────────── */
+.sm-announcement-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.sm-announce-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 40px;
+  height: 40px;
+  background: #fff3f5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sm-announce-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.sm-announce-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 4px;
+}
+
+.sm-announce-msg {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.sm-announce-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ── Order Notices ──────────────────────────────────────────── */
+.sm-notice-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.sm-notice-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  background: #f0fdf4;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sm-notice-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.sm-notice-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.sm-notice-order {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-notice-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.sm-notice-product {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-notice-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ── Modal backdrop ─────────────────────────────────────────── */
+.sm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  padding: 0;
+  animation: sm-fade-in 0.18s ease;
+}
+
+@keyframes sm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (min-width: 600px) {
+  .sm-modal-backdrop {
+    align-items: center;
+    padding: 24px;
+  }
+}
+
+/* ── Modal ──────────────────────────────────────────────────── */
+.sm-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 540px;
+  height: 85vh;
+  max-height: 680px;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+  animation: sm-slide-up 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (min-width: 600px) {
+  .sm-modal {
+    border-radius: 18px;
+    animation: sm-pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+@keyframes sm-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes sm-pop-in {
+  from { transform: scale(0.94); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ── Modal Header ───────────────────────────────────────────── */
+.sm-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.sm-modal-partner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sm-modal-partner-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-modal-channel {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 1px;
+  text-transform: capitalize;
+}
+
+.sm-modal-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.sm-modal-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* ── Bubble area ────────────────────────────────────────────── */
+.sm-bubbles {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 4px;
+  background: #f8fafc;
+  min-height: 0;
+}
+
+/* ── Bubble wrap (positions mine vs theirs) ─────────────────── */
+.sm-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 78%;
+  margin-top: 6px;
+}
+
+.sm-bubble-wrap--mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+/* ── Product tag ────────────────────────────────────────────── */
+.sm-product-tag {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-product-tag--mine {
+  background: rgba(251, 60, 92, 0.1);
+  color: #fb3c5c;
+}
+
+/* ── Bubble ─────────────────────────────────────────────────── */
+.sm-bubble {
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.sm-bubble--mine {
+  background: #fb3c5c;
+  color: #fff;
+  border-radius: 18px 18px 4px 18px;
+}
+
+.sm-bubble--theirs {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* ── Bubble timestamp ───────────────────────────────────────── */
+.sm-bubble-time {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 3px;
+  padding: 0 4px;
+}
+
+.sm-bubble-time--mine {
+  color: #94a3b8;
+}
+
+/* ── Compose bar ────────────────────────────────────────────── */
+.sm-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid #f1f5f9;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.sm-compose-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 14px;
+  font-family: inherit;
+  color: #0f172a;
+  background: transparent;
+  min-height: 44px;
+  max-height: 120px;
+  line-height: 1.5;
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+.sm-compose-input::placeholder {
+  color: #94a3b8;
+}
+
+/* ── Send button ────────────────────────────────────────────── */
+.sm-send-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #fb3c5c;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+  box-shadow: 0 2px 8px rgba(251, 60, 92, 0.35);
+}
+
+.sm-send-btn:hover:not(:disabled) {
+  background: #e0304e;
+  transform: scale(1.05);
+}
+
+.sm-send-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.sm-send-btn:disabled {
+  background: #f1f5f9;
+  color: #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Scrollbar styling ──────────────────────────────────────── */
+.sm-body::-webkit-scrollbar,
+.sm-bubbles::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sm-body::-webkit-scrollbar-track,
+.sm-bubbles::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sm-body::-webkit-scrollbar-thumb,
+.sm-bubbles::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.sm-bubbles::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}

@@ -26,24 +26,39 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   const [notice, setNotice] = useState('');
   const [methodPickerOpen, setMethodPickerOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [savedMethods, setSavedMethods] = useState({});
   const visibleRecords = statusFilter === 'All' ? records : records.filter((record) => record.status === statusFilter);
   const loadCloudRecords = async () => {
     const { data } = await sellerSupabase.from('withdrawals').select('*').order('created_at',{ascending:false});
-    if(data?.length) setRecords(data.map((item)=>({id:item.id.slice(0,8).toUpperCase()+'...',dbId:item.id,amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),updated:new Date(item.updated_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
+    if(data?.length) setRecords(data.map((item)=>({id:String(item.id).slice(0,8).toUpperCase()+'...',dbId:item.id,amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),updated:new Date(item.updated_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
   };
-  useEffect(() => { loadCloudRecords(); }, []);
+  const loadSavedMethods = async () => {
+    const { data: auth } = await sellerSupabase.auth.getUser();
+    if (!auth?.user) return;
+    const { data } = await sellerSupabase.from('payment_methods').select('method_type,details').eq('seller_id', auth.user.id);
+    const map = {};
+    (data || []).forEach((row) => {
+      if (row.method_type === 'bank_card') map['Bank Card'] = [row.details?.name, row.details?.bankName, row.details?.cardNumber].filter(Boolean).join(' · ');
+      if (row.method_type === 'e_wallet') map['E-Wallet'] = [row.details?.name, row.details?.walletName, row.details?.walletNumber].filter(Boolean).join(' · ');
+      if (row.method_type === 'digital_currency') map['Crypto'] = row.details?.trc20 || row.details?.erc20 || row.details?.bep20 || '';
+    });
+    setSavedMethods(map);
+  };
+  useEffect(() => { loadCloudRecords(); loadSavedMethods(); }, []);
 
   const selectMethod = (selectedMethod) => {
     setMethod(selectedMethod);
-    setAccount('');
+    setAccount(savedMethods[selectedMethod] || '');
     setMethodPickerOpen(false);
   };
 
   const submit = async (event) => {
     event.preventDefault();
     const { data: auth } = await sellerSupabase.auth.getUser();
-    const { data } = await sellerSupabase.from('withdrawals').insert({seller_id:auth.user.id,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
-    const record = { id: data ? data.id.slice(0,8).toUpperCase()+'...' : `${Date.now().toString(16).toUpperCase().slice(-8)}...`, dbId:data?.id,amount: Number(amount), method, account, date: new Date(data?.created_at||Date.now()).toLocaleString(), status: 'Pending' };
+    const { data, error } = await sellerSupabase.from('withdrawals').insert({seller_id:auth.user.id,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
+    if (error) { setNotice(`Could not submit withdrawal: ${error.message}`); window.setTimeout(() => setNotice(''), 3000); return; }
+    const idLabel = data?.id != null ? String(data.id).slice(0, 8).toUpperCase() + '...' : `${Date.now().toString(16).toUpperCase().slice(-8)}...`;
+    const record = { id: idLabel, dbId:data?.id,amount: Number(amount), method, account, date: new Date(data?.created_at||Date.now()).toLocaleString(), status: 'Pending' };
     setRecords((current) => [record, ...current]);
     try { const current = JSON.parse(localStorage.getItem('seller_withdrawal_requests')) || []; localStorage.setItem('seller_withdrawal_requests', JSON.stringify([record, ...current])); } catch { /* unavailable */ }
     setAmount(''); setTradePassword(''); setNotice('Withdrawal request submitted for review.');

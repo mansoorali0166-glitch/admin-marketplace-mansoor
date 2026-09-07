@@ -1,3 +1,7 @@
+/* =========================
+   PAGE LAYOUT
+   ========================= */
+
 .agent-seller-chat-page {
   padding: 34px 28px 70px;
   color: #111827;
@@ -10,51 +14,170 @@
   margin: 0;
   color: #94a3b8;
 }
+
+/* =========================
+   NEW MESSAGE FORM
+   ========================= */
+
 .agent-chat-new {
   display: grid;
-  grid-template-columns: 210px 1fr 80px;
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+
   margin-top: 22px;
-  padding: 38px 15px 15px;
-  position: relative;
+
   border: 1px solid #dce2e8;
   border-radius: 14px;
   background: #fff;
-}
-.agent-chat-new small {
-  position: absolute;
-  top: 14px;
-  left: 15px;
-  color: #94a3b8;
-  font-weight: 700;
-}
-.agent-chat-new select,
-.agent-chat-new input,
-.agent-chat-new button {
-  min-height: 42px;
+  overflow: hidden;
+
   box-sizing: border-box;
+}
+
+/* ── Row 1: label + dropdowns ── */
+.agent-chat-new-selects {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 18px 20px 20px;
+}
+
+/* "NEW MESSAGE" label */
+.agent-chat-new-selects > small {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Merchant + Product dropdowns */
+.agent-chat-new-selects > select {
+  width: 100%;
+  height: 44px;
+  min-width: 0;
+  padding: 0 13px;
   border: 1px solid #d9e0e8;
-  border-radius: 9px;
-  padding: 0 14px;
+  border-radius: 8px;
   background: #fff;
+  color: #475569;
   font: inherit;
-  outline: 0;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
 }
-.agent-chat-new select:focus,
-.agent-chat-new input:focus {
+
+.agent-chat-new-selects > select:focus {
   border-color: #149b90;
+  box-shadow: 0 0 0 3px rgba(20, 155, 144, 0.12);
 }
-.agent-chat-new button {
+
+/* "No products" hint */
+.agent-chat-new-selects > small.agent-chat-no-products {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Divider ── */
+.agent-chat-new > hr {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  border: none;
+  background: #e8edf2;
+}
+
+/* ── Row 2: message textarea + send ── */
+.agent-chat-new-message {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  background: #f8fafc;
+}
+
+/* Message textarea */
+.agent-chat-message-input {
+  width: 100%;
+  min-height: 110px;
+  max-height: 300px;
+
+  padding: 14px 15px;
+
+  border: 1.5px solid #d9e0e8;
+  border-radius: 10px;
+
+  background: #fff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+  overflow-y: auto;
+
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.agent-chat-message-input::placeholder {
+  color: #a3adbb;
+}
+
+.agent-chat-message-input:focus {
   border-color: #149b90;
+  box-shadow: 0 0 0 3px rgba(20, 155, 144, 0.12);
+}
+
+/* Send button */
+.agent-chat-new-message > button[type="submit"] {
+  align-self: flex-start;
+
+  min-width: 130px;
+  height: 42px;
+  padding: 0 22px;
+
+  border: 0;
+  border-radius: 9px;
+
   background: #149b90;
   color: #fff;
+
+  font: inherit;
+  font-size: 13.5px;
   font-weight: 700;
+
   cursor: pointer;
+  transition: background 0.2s ease;
 }
-.agent-chat-new button:disabled {
-  opacity: 0.45;
-  cursor: default;
+
+.agent-chat-new-message > button[type="submit"]:hover {
+  background: #10877d;
 }
+
+.agent-chat-new-message > button[type="submit"]:disabled {
+  background: #a9d8d3;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+/* =========================
+   MESSAGE HISTORY
+   ========================= */
+
 .agent-chat-history-title {
   display: flex;
   justify-content: space-between;
@@ -146,6 +269,11 @@
   background: #fff;
   color: #94a3b8;
 }
+
+/* =========================
+   THREAD OVERLAY
+   ========================= */
+
 .agent-chat-thread-overlay {
   position: fixed;
   inset: 0;
@@ -214,12 +342,22 @@
 .agent-chat-thread-overlay article.mine time {
   color: #ccfbf1;
 }
+
+/* =========================
+   MOBILE
+   ========================= */
+
 @media (max-width: 750px) {
   .agent-seller-chat-page {
     padding: 24px 14px 55px;
   }
-  .agent-chat-new {
+  .agent-chat-new-selects {
     grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 16px 16px 14px;
+  }
+  .agent-chat-new-message {
+    padding: 14px 16px 16px;
   }
   .agent-chat-history > article {
     display: grid;

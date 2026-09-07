@@ -514,34 +514,52 @@ function AgentMessages() {
             </div>
           )}
         </div>
-        <form onSubmit={send}>
-          <button
-            type="button"
-            aria-label="Attach file"
-            onClick={() => fileInput.current?.click()}
-          >
-            ⌕
-          </button>
-          <input
-            ref={fileInput}
-            hidden
-            type="file"
-            accept="image/*"
-            onChange={attach}
-          />
-          <input
-            aria-label="Message"
-            placeholder="Type a message..."
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={!message.trim() || sending}
-            aria-label="Send message"
-          >
-            ➤
-          </button>
+        <form onSubmit={send} className="agent-messages-form">
+          <div className="agent-messages-input-row">
+            <button
+              type="button"
+              className="agent-msg-icon-btn"
+              aria-label="Attach file"
+              onClick={() => fileInput.current?.click()}
+            >
+              ⌕
+            </button>
+            <input
+              ref={fileInput}
+              hidden
+              type="file"
+              accept="image/*"
+              onChange={attach}
+            />
+            <textarea
+              className="agent-msg-textarea"
+              aria-label="Message"
+              placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
+              value={message}
+              rows={1}
+              onChange={(event) => {
+                setMessage(event.target.value);
+                // auto-grow
+                const el = event.target;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 160) + "px";
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  send(event);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              className="agent-msg-send-btn"
+              disabled={!message.trim() || sending}
+              aria-label="Send message"
+            >
+              ➤
+            </button>
+          </div>
         </form>
       </section>
     </div>
@@ -1294,44 +1312,69 @@ function AgentSellerChat() {
         <p>Send messages to your sellers and reply to conversations.</p>
       </header>
       <form className="agent-chat-new" onSubmit={send}>
-        <small>NEW MESSAGE</small>
-        <select
-          required
-          value={sellerId}
-          onChange={(event) => setSellerId(event.target.value)}
-        >
-          <option value="">Select seller...</option>
-          {sellers.map((seller) => (
-            <option value={seller.id} key={seller.id}>
-              {seller.name}
-            </option>
-          ))}
-        </select>
-        {sellerId && (
+        {/* ── Row 1: Merchant + Product ── */}
+        <div className="agent-chat-new-selects">
+          <small>New Message</small>
           <select
-            value={productId}
-            onChange={(event) => setProductId(event.target.value)}
+            required
+            value={sellerId}
+            onChange={(event) => setSellerId(event.target.value)}
           >
-            <option value="">No specific product</option>
-            {sellerProducts.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name || product.product_code} · $
-                {Number(product.sell_price || 0).toFixed(2)}
+            <option value="">Select seller...</option>
+            {sellers.map((seller) => (
+              <option value={seller.id} key={seller.id}>
+                {seller.name}
               </option>
             ))}
           </select>
-        )}
-        {sellerId && !sellerProducts.length && (
-          <small>This seller has no on-shelf products.</small>
-        )}
-        <input
-          placeholder="Write your message..."
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-        />
-        <button type="submit" disabled={!sellerId || !message.trim()}>
-          ➤ Send
-        </button>
+          {sellerId && (
+            <select
+              value={productId}
+              onChange={(event) => setProductId(event.target.value)}
+            >
+              <option value="">No specific product</option>
+              {sellerProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name || product.product_code} · $
+                  {Number(product.sell_price || 0).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          )}
+          {sellerId && !sellerProducts.length && (
+            <small className="agent-chat-no-products">
+              This seller has no on-shelf products.
+            </small>
+          )}
+        </div>
+
+        {/* ── Divider ── */}
+        <hr />
+
+        {/* ── Row 2: Message + Send ── */}
+        <div className="agent-chat-new-message">
+          <textarea
+            className="agent-chat-message-input"
+            placeholder="Write your message… (Enter to send, Shift+Enter for new line)"
+            value={message}
+            rows={3}
+            onChange={(event) => {
+              setMessage(event.target.value);
+              const el = event.target;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 180) + "px";
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                if (sellerId && message.trim()) send(event);
+              }
+            }}
+          />
+          <button type="submit" disabled={!sellerId || !message.trim()}>
+            ➤ Send
+          </button>
+        </div>
       </form>
       <div className="agent-chat-history-title">
         <span>Message History</span>
@@ -3727,48 +3770,110 @@ function AgentOrderList() {
   const [status, setStatus] = useState("All Statuses");
   const [search, setSearch] = useState("");
   const [step, setStep] = useState(0);
+  const [sellers, setSellers] = useState([]);
+  const [sellerProducts, setSellerProducts] = useState([]);
   const [draft, setDraft] = useState({
-    seller: "",
-    product: "Pink Kids Backpack",
+    sellerId: "",
+    productId: "",
+    productName: "",
+    sellPrice: "",
+    costPrice: "",
     qty: 1,
   });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (step !== 1 || sellers.length) return;
+    agentSupabase
+      .from("profiles")
+      .select("id,display_name,email")
+      .eq("role", "seller")
+      .order("display_name")
+      .then(({ data }) => {
+        setSellers(
+          (data || []).map((item) => ({
+            id: item.id,
+            name: item.display_name || item.email.split("@")[0],
+          })),
+        );
+      });
+  }, [step, sellers.length]);
+
+  const selectSeller = (sellerId) => {
+    setDraft((current) => ({
+      ...current,
+      sellerId,
+      productId: "",
+      productName: "",
+      sellPrice: "",
+      costPrice: "",
+    }));
+    if (sellerId) {
+      agentSupabase
+        .from("showcase_products")
+        .select("on_shelf,products(id,name,product_code,sell_price,cost_price)")
+        .eq("seller_id", sellerId)
+        .then(({ data }) => {
+          setSellerProducts(
+            (data || [])
+              .filter((row) => row.on_shelf && row.products)
+              .map((row) => row.products),
+          );
+        });
+    } else {
+      setSellerProducts([]);
+    }
+  };
+
+  const selectProduct = (productId) => {
+    const product = sellerProducts.find(
+      (item) => String(item.id) === productId,
+    );
+    setDraft((current) => ({
+      ...current,
+      productId,
+      productName: product?.name || product?.product_code || "",
+      sellPrice: product ? String(product.sell_price ?? "") : "",
+      costPrice: product ? String(product.cost_price ?? "") : "",
+    }));
+  };
+
   const visible = orders.filter(
     (order) =>
       (status === "All Statuses" || order.status === status) &&
       [order.id, order.product, order.seller].some((value) =>
-        value.toLowerCase().includes(search.toLowerCase()),
+        String(value || "")
+          .toLowerCase()
+          .includes(search.toLowerCase()),
       ),
   );
   const close = () => {
     setStep(0);
-    setDraft({ seller: "", product: "Pink Kids Backpack", qty: 1 });
+    setDraft({
+      sellerId: "",
+      productId: "",
+      productName: "",
+      sellPrice: "",
+      costPrice: "",
+      qty: 1,
+    });
+    setSellerProducts([]);
   };
-  const addOrder = (event) => {
+  const addOrder = async (event) => {
     event.preventDefault();
-    const price =
-      draft.product === "Pink Kids Backpack"
-        ? 200.1
-        : draft.product === "Headphones"
-          ? 20
-          : 10;
-    setOrders([
-      {
-        id: `DEMO-${Date.now().toString().slice(-6)}`,
-        seller: draft.seller,
-        product: draft.product,
-        customer: "Demo Customer",
-        qty: Number(draft.qty),
-        sale: price * Number(draft.qty),
-        profit: price * 0.2 * Number(draft.qty),
-        status: "Pending Receive",
-        date: new Date().toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }),
-      },
-      ...orders,
-    ]);
-    close();
+    setBusy(true);
+    const { error } = await agentSupabase.from("orders").insert({
+      seller_id: draft.sellerId,
+      order_no: `MH${Date.now()}`,
+      product_name: draft.productName,
+      customer_name: "Demo Customer",
+      quantity: Number(draft.qty || 1),
+      sell_price: Number(draft.sellPrice || 0),
+      cost_price: Number(draft.costPrice || 0),
+      status: "Pending Ship",
+    });
+    setBusy(false);
+    if (!error) close();
   };
   return (
     <div className="agent-order-list-page">
@@ -3789,11 +3894,17 @@ function AgentOrderList() {
           value={status}
           onChange={(event) => setStatus(event.target.value)}
         >
-          {["All Statuses", "Pending Receive", "Completed", "Refund"].map(
-            (item) => (
-              <option key={item}>{item}</option>
-            ),
-          )}
+          {[
+            "All Statuses",
+            "Pending Ship",
+            "Pending Receive",
+            "Shipped",
+            "Completed",
+            "Refund",
+            "Cancelled",
+          ].map((item) => (
+            <option key={item}>{item}</option>
+          ))}
         </select>
         <label>
           <span>⌕</span>
@@ -3826,7 +3937,9 @@ function AgentOrderList() {
             <strong className="profit">${order.profit.toFixed(2)}</strong>
             <span>
               <em
-                className={`status-${order.status.toLowerCase().replace(" ", "-")}`}
+                className={`status-${String(order.status || "")
+                  .toLowerCase()
+                  .replace(" ", "-")}`}
               >
                 {order.status}
               </em>
@@ -3851,7 +3964,7 @@ function AgentOrderList() {
               step === 1
                 ? (event) => {
                     event.preventDefault();
-                    if (draft.seller) setStep(2);
+                    if (draft.sellerId) setStep(2);
                   }
                 : addOrder
             }
@@ -3867,13 +3980,15 @@ function AgentOrderList() {
                 Seller *
                 <select
                   required
-                  value={draft.seller}
-                  onChange={(event) =>
-                    setDraft({ ...draft, seller: event.target.value })
-                  }
+                  value={draft.sellerId}
+                  onChange={(event) => selectSeller(event.target.value)}
                 >
                   <option value="">— Select seller —</option>
-                  <option>Demo Merchant</option>
+                  {sellers.map((seller) => (
+                    <option key={seller.id} value={seller.id}>
+                      {seller.name}
+                    </option>
+                  ))}
                 </select>
               </label>
             ) : (
@@ -3881,15 +3996,21 @@ function AgentOrderList() {
                 <label>
                   Product *
                   <select
-                    value={draft.product}
-                    onChange={(event) =>
-                      setDraft({ ...draft, product: event.target.value })
-                    }
+                    required
+                    value={draft.productId}
+                    onChange={(event) => selectProduct(event.target.value)}
                   >
-                    <option>Pink Kids Backpack</option>
-                    <option>Headphones</option>
-                    <option>Data Cable</option>
+                    <option value="">— Select product from showcase —</option>
+                    {sellerProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name || product.product_code} · $
+                        {Number(product.sell_price || 0).toFixed(2)}
+                      </option>
+                    ))}
                   </select>
+                  {!sellerProducts.length && (
+                    <small>This seller has no on-shelf products.</small>
+                  )}
                 </label>
                 <label>
                   Quantity *
@@ -3902,6 +4023,31 @@ function AgentOrderList() {
                     }
                   />
                 </label>
+                <label>
+                  Sell Price *
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={draft.sellPrice}
+                    onChange={(event) =>
+                      setDraft({ ...draft, sellPrice: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Cost Price
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={draft.costPrice}
+                    onChange={(event) =>
+                      setDraft({ ...draft, costPrice: event.target.value })
+                    }
+                  />
+                </label>
               </div>
             )}
             <footer>
@@ -3911,8 +4057,11 @@ function AgentOrderList() {
               >
                 {step === 1 ? "Cancel" : "Back"}
               </button>
-              <button type="submit" disabled={step === 1 && !draft.seller}>
-                {step === 1 ? "Next ›" : "Create Order"}
+              <button
+                type="submit"
+                disabled={(step === 1 && !draft.sellerId) || busy}
+              >
+                {step === 1 ? "Next ›" : busy ? "Creating…" : "Create Order"}
               </button>
             </footer>
           </form>
@@ -4581,10 +4730,30 @@ function AgentShowcase() {
   const [products, setProducts] = useState(demoShowcaseProducts);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [productForm, setProductForm] = useState({
+    name: "",
+    sku: "",
+    sellPrice: "",
+    costPrice: "",
+    category: "",
+    image: "",
+  });
+  const [productError, setProductError] = useState("");
+  const [savingProduct, setSavingProduct] = useState(false);
+
+  const loadProducts = async () => {
+    const { data, error } = await agentSupabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error) setProducts(data || []);
+    setLoading(false);
+  };
 
   useEffect(() => {
     let mounted = true;
-    const loadProducts = async () => {
+    const initialLoad = async () => {
       const { data, error } = await agentSupabase
         .from("products")
         .select("*")
@@ -4592,7 +4761,7 @@ function AgentShowcase() {
       if (mounted && !error && data?.length) setProducts(data);
       if (mounted) setLoading(false);
     };
-    loadProducts();
+    initialLoad();
     const channel = agentSupabase
       .channel("agent-global-products")
       .on(
@@ -4606,6 +4775,70 @@ function AgentShowcase() {
       agentSupabase.removeChannel(channel);
     };
   }, []);
+
+  const pickProductImageFile = (file) => {
+    if (!file?.type?.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () =>
+      setProductForm((current) => ({ ...current, image: reader.result }));
+    reader.readAsDataURL(file);
+  };
+  const uploadProductImage = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    pickProductImageFile(file);
+  };
+  const pasteProductImage = (event) => {
+    const file = Array.from(event.clipboardData?.items || [])
+      .find((item) => item.type.startsWith("image/"))
+      ?.getAsFile();
+    if (file) {
+      event.preventDefault();
+      pickProductImageFile(file);
+    }
+  };
+  (event) => {
+    const file = Array.from(event.clipboardData?.items || [])
+      .find((item) => item.type.startsWith("image/"))
+      ?.getAsFile();
+    if (file) {
+      event.preventDefault();
+      pickProductImageFile(file);
+    }
+  };
+  const createProduct = async (event) => {
+    event.preventDefault();
+    const sellPrice = Number(productForm.sellPrice);
+    if (!productForm.name.trim())
+      return setProductError("Enter a product name.");
+    if (!sellPrice || sellPrice <= 0)
+      return setProductError("Enter a valid sell price.");
+    setSavingProduct(true);
+    setProductError("");
+    const productCode = `CR${Date.now().toString().slice(-6)}`;
+    const { error } = await agentSupabase.from("products").insert({
+      product_code: productCode,
+      sku: productForm.sku.trim() || `P${Date.now()}`,
+      name: productForm.name.trim(),
+      sell_price: sellPrice,
+      cost_price: Number(productForm.costPrice || 0),
+      category: productForm.category.trim() || "Other",
+      image_url: productForm.image.trim() || null,
+      admin_on_shelf: true,
+    });
+    setSavingProduct(false);
+    if (error) return setProductError(error.message);
+    setProductForm({
+      name: "",
+      sku: "",
+      sellPrice: "",
+      costPrice: "",
+      category: "",
+      image: "",
+    });
+    setCreating(false);
+    await loadProducts();
+  };
 
   const visibleProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -4629,14 +4862,135 @@ function AgentShowcase() {
           all sellers.
         </p>
       </header>
-      <div className="agent-showcase-info">
-        <span>◇</span>
-        <p>
-          Showcase products are managed centrally by the admin. All sellers
-          automatically see the same product catalogue. Contact the admin to add
-          or update showcase products.
-        </p>
+      <div className="agent-showcase-create-row">
+        <button
+          type="button"
+          className="agent-showcase-create-btn"
+          onClick={() => setCreating(true)}
+        >
+          ＋ Create Product
+        </button>
       </div>
+      {creating && (
+        <div
+          className="agent-product-overlay"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setCreating(false)
+          }
+        >
+          <form className="agent-product-modal" onSubmit={createProduct}>
+            <header>
+              <h3>＋ Create Product</h3>
+              <button type="button" onClick={() => setCreating(false)}>
+                ×
+              </button>
+            </header>
+            {productError && (
+              <p className="agent-product-error">{productError}</p>
+            )}
+            <label>
+              Name *
+              <input
+                required
+                value={productForm.name}
+                onChange={(event) =>
+                  setProductForm({ ...productForm, name: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              SKU
+              <input
+                placeholder="Auto-generated if left blank"
+                value={productForm.sku}
+                onChange={(event) =>
+                  setProductForm({ ...productForm, sku: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Sell Price *
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={productForm.sellPrice}
+                onChange={(event) =>
+                  setProductForm({
+                    ...productForm,
+                    sellPrice: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Cost Price
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={productForm.costPrice}
+                onChange={(event) =>
+                  setProductForm({
+                    ...productForm,
+                    costPrice: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Category
+              <input
+                placeholder="Other"
+                value={productForm.category}
+                onChange={(event) =>
+                  setProductForm({
+                    ...productForm,
+                    category: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label className="wide">
+              Product Image
+              <div className="buyer-image-editor" onPaste={pasteProductImage}>
+                {productForm.image ? (
+                  <img src={productForm.image} alt="Product preview" />
+                ) : (
+                  <span>Product photo</span>
+                )}
+                <div>
+                  <label>
+                    Upload or paste image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={uploadProductImage}
+                    />
+                  </label>
+                </div>
+              </div>
+            </label>
+            <footer>
+              <button
+                type="button"
+                className="agent-product-cancel"
+                onClick={() => setCreating(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="agent-product-submit"
+                disabled={savingProduct}
+              >
+                {savingProduct ? "Saving…" : "Create Product"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
       <div className="agent-showcase-tools">
         <label>
           <span>⌕</span>
@@ -4828,7 +5182,6 @@ function AgentMerchantList() {
   const actionsForMerchant = (merchant) => [
     "Balance",
     "Reset Pwd",
-    "Kick",
     merchant.status === "Suspended" ? "Unlock Account" : "Lock Account",
     "Login",
     "Logs",
@@ -4997,6 +5350,7 @@ function AgentMerchantList() {
           client={agentSupabase}
           merchant={modal.merchant}
           action={modal.action}
+          actor="Agent"
           onClose={() => setModal(null)}
           onChanged={refreshChangedMerchant}
           openAction={(action) =>

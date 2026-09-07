@@ -43,7 +43,7 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   const assets = sourceTransactions.reduce((sum, item) => sum + (item.amount.startsWith('-') ? -1 : 1) * Number(item.amount.replace(/[^0-9.]/g, '') || 0), 0);
   const visibleTransactions = useMemo(() => filter === 'All' ? sourceTransactions : sourceTransactions.filter((item) => item.type === filter), [filter, sourceTransactions]);
 
-  if (walletView === 'recharge') return <SellerRecharge onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'recharge') return <SellerRecharge client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
   if (walletView === 'withdraw') return <SellerWithdraw onBack={() => setWalletView('wallet')} />;
   if (walletView === 'withdraw-records') return <SellerWithdraw recordsOnly onBack={() => setWalletView('wallet')} onNewWithdrawal={() => setWalletView('withdraw')} />;
   if (walletView === 'bank-card') return <SellerBankCard onBack={() => setWalletView('wallet')} />;
