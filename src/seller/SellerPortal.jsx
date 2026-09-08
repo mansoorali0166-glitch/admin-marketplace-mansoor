@@ -28,6 +28,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [shopNameDraft, setShopNameDraft] = useState(previewMerchant?.name || 'Khan321');
   const [showNameModal, setShowNameModal] = useState(false);
   const [nameChanged, setNameChanged] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
   const [sellerView, setSellerView] = useState('home');
   const [sellerId, setSellerId] = useState(previewMerchant?.userId || null);
   const [profile, setProfile] = useState(null);
@@ -130,9 +132,17 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const saveShopName = async (event) => {
     event.preventDefault();
     const nextName = shopNameDraft.trim();
-    if (!nextName || nameChanged) return;
+    if (!nextName || nameChanged || nameSaving) return;
+    setNameSaving(true);
+    setNameError('');
+    const { error } = await portalClient.rpc('update_own_seller_display_name', { new_display_name: nextName });
+    setNameSaving(false);
+    if (error) {
+      setNameError(error.message || 'Could not update the shop name.');
+      return;
+    }
     setShopName(nextName);
-    if (sellerId) await portalClient.from('profiles').update({ display_name: nextName }).eq('id', sellerId);
+    setProfile((current) => current ? { ...current, display_name: nextName } : current);
     setNameChanged(true);
     setShowNameModal(false);
   };
@@ -186,7 +196,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         <nav className="seller-help-links"><button type="button" onClick={() => setSellerView('invite')}><b>♙＋</b><span>Invite</span></button><button type="button" onClick={() => setSellerView('feedback')}><b>⌕</b><span>Feedback</span></button><button type="button" onClick={() => setSellerView('service')}><b>♧</b><span>Service</span></button></nav>
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
-      {showNameModal && <div className="shop-name-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && setShowNameModal(false)}><form className="shop-name-modal" onSubmit={saveShopName}><div className="shop-name-modal-header"><button type="button" onClick={() => setShowNameModal(false)}>×</button><h2>Edit Shop Name</h2><span /></div><div className="shop-name-modal-body"><p>Shop name can only be changed once</p><input autoFocus maxLength="40" value={shopNameDraft} onChange={(event) => setShopNameDraft(event.target.value)} aria-label="Shop name" /><button type="submit" disabled={!shopNameDraft.trim()}>Confirm</button></div></form></div>}
+      {showNameModal && <div className="shop-name-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !nameSaving && setShowNameModal(false)}><form className="shop-name-modal" onSubmit={saveShopName}><div className="shop-name-modal-header"><button type="button" disabled={nameSaving} onClick={() => setShowNameModal(false)}>×</button><h2>Edit Shop Name</h2><span /></div><div className="shop-name-modal-body"><p>Shop name can only be changed once</p><input autoFocus maxLength="40" value={shopNameDraft} onChange={(event) => setShopNameDraft(event.target.value)} aria-label="Shop name" disabled={nameSaving} />{nameError && <p className="shop-name-error">{nameError}</p>}<button type="submit" disabled={!shopNameDraft.trim() || nameSaving}>{nameSaving ? 'Saving…' : 'Confirm'}</button></div></form></div>}
     </main>
   );
 }

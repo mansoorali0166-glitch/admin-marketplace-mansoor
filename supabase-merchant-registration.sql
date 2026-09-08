@@ -101,8 +101,8 @@ begin
     'seller',selected_agent,coalesce(selected_user.raw_user_meta_data->>'address',''),
     coalesce(selected_user.raw_user_meta_data->>'phone',''),false,'Pending')
   on conflict (id) do update set agent_id=excluded.agent_id,address=excluded.address,phone=excluded.phone,
-    allow_login=case when public.profiles.registration_status='Approved' then public.profiles.allow_login else false end,
-    registration_status=case when public.profiles.registration_status='Approved' then 'Approved' else 'Pending' end;
+    allow_login=public.profiles.allow_login,
+    registration_status=public.profiles.registration_status;
 
   insert into public.merchant_applications (seller_id,agent_id,name,email,address,phone,status,created_at,decided_at)
   values (selected_user.id,selected_agent,
@@ -111,11 +111,27 @@ begin
     coalesce(selected_user.raw_user_meta_data->>'phone',''),'Pending',now(),null)
   on conflict (seller_id) do update set
     agent_id=excluded.agent_id,name=excluded.name,email=excluded.email,address=excluded.address,phone=excluded.phone,
-    status=case when public.merchant_applications.status='Approved' then 'Approved' else 'Pending' end,
-    created_at=case when public.merchant_applications.status='Approved' then public.merchant_applications.created_at else now() end,
-    decided_at=case when public.merchant_applications.status='Approved' then public.merchant_applications.decided_at else null end
+    status=public.merchant_applications.status,
+    created_at=public.merchant_applications.created_at,
+    decided_at=public.merchant_applications.decided_at
   returning id into application_id;
   return application_id;
+end; $$;
+
+create or replace function public.sync_agent_merchant_applications()
+returns void language plpgsql security definer set search_path=public,auth as $$
+declare own_code text; registration_user record;
+begin
+  if auth.uid() is null or not public.is_agent() then raise exception 'Agent access is required'; end if;
+  select invitation_code into own_code from public.profiles where id=auth.uid() and role='agent';
+  if coalesce(own_code,'')='' then raise exception 'This agent does not have an invitation code'; end if;
+  for registration_user in
+    select id from auth.users
+    where coalesce(raw_user_meta_data->>'role','')='seller'
+      and upper(trim(raw_user_meta_data->>'invitation_code'))=upper(own_code)
+  loop
+    perform public.ensure_merchant_application(registration_user.id,own_code);
+  end loop;
 end; $$;
 
 create or replace function public.handle_new_user() returns trigger
@@ -140,8 +156,29 @@ end; $$;
 
 revoke all on function public.verify_agent_invitation_code(text) from public;
 revoke all on function public.ensure_merchant_application(uuid,text) from public;
+revoke all on function public.sync_agent_merchant_applications() from public;
 grant execute on function public.verify_agent_invitation_code(text) to anon,authenticated;
 grant execute on function public.ensure_merchant_application(uuid,text) to anon,authenticated;
+grant execute on function public.sync_agent_merchant_applications() to authenticated;
+
+create or replace function public.update_own_seller_display_name(new_display_name text)
+returns text language plpgsql security definer set search_path=public,auth as $$
+declare cleaned_name text;
+begin
+  cleaned_name := trim(coalesce(new_display_name,''));
+  if auth.uid() is null then raise exception 'Sign in is required'; end if;
+  if cleaned_name='' or char_length(cleaned_name)>40 then raise exception 'Shop name must contain 1 to 40 characters'; end if;
+  update public.profiles set display_name=cleaned_name where id=auth.uid() and role='seller';
+  if not found then raise exception 'Seller profile not found'; end if;
+  update public.merchant_applications set name=cleaned_name where seller_id=auth.uid();
+  update auth.users
+  set raw_user_meta_data=jsonb_set(coalesce(raw_user_meta_data,'{}'::jsonb),'{display_name}',to_jsonb(cleaned_name),true)
+  where id=auth.uid();
+  return cleaned_name;
+end; $$;
+
+revoke all on function public.update_own_seller_display_name(text) from public;
+grant execute on function public.update_own_seller_display_name(text) to authenticated;
 
 -- Repair verified seller sign-ups created before this trigger version was installed.
 with registration_users as (

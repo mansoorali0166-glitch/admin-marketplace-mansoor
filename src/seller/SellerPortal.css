@@ -12,3 +12,4 @@
   cursor: pointer;
 }
 .seller-avatar-error { color: #c0392b; font-size: 13px; margin: 4px 16px 0; }
+.shop-name-error { margin: 12px 0 0 !important; color: #dc2626 !important; font-size: 13px !important; }
