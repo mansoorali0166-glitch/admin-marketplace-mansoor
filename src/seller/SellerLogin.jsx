@@ -4,71 +4,65 @@ import './SellerPortal.css';
 import { sellerSupabase } from '../shared/supabase';
 
 export default function SellerLogin({ onLoginSuccess }) {
+  const [registering, setRegistering] = useState(window.location.pathname.toLowerCase().includes('/register'));
+  const [storeName, setStoreName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
-    setSubmitting(true); setError('');
+    setSubmitting(true); setError(''); setNotice('');
     const { data, error: authError } = await sellerSupabase.auth.signInWithPassword({ email, password });
     if (authError) { setError(authError.message); setSubmitting(false); return; }
-    const { data: profile } = await sellerSupabase.from('profiles').select('role,allow_login,shop_locked').eq('id', data.user.id).single();
-    if (!['seller','agent'].includes(profile?.role)) { await sellerSupabase.auth.signOut(); setError('This account does not have seller access.'); setSubmitting(false); return; }
+    const { data: profile } = await sellerSupabase.from('profiles').select('role,allow_login').eq('id', data.user.id).single();
+    if (!['seller', 'agent'].includes(profile?.role)) { await sellerSupabase.auth.signOut(); setError('This account does not have seller access.'); setSubmitting(false); return; }
     if (profile?.allow_login === false) { await sellerSupabase.auth.signOut(); setError('This account has been locked. Contact your administrator.'); setSubmitting(false); return; }
     onLoginSuccess();
   };
 
+  const handleRegister = async (event) => {
+    event.preventDefault();
+    setSubmitting(true); setError(''); setNotice('');
+    const { data, error: authError } = await sellerSupabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: storeName.trim(), role: 'seller' } },
+    });
+    setSubmitting(false);
+    if (authError) { setError(authError.message); return; }
+    if (data.session) { onLoginSuccess(); return; }
+    setNotice('Registration successful. Check your email to confirm your account, then log in.');
+  };
+
+  const switchMode = (next) => {
+    setRegistering(next); setError(''); setNotice(''); setPassword('');
+    window.history.replaceState({}, '', next ? '/seller/register' : '/seller');
+  };
+
   return (
     <main className="seller-login-page">
-      <section className="seller-login-brand">
-        <div className="seller-brand-mark">S</div>
-        <h1>MarketHub Seller Center</h1>
-        <p>Manage your store, products, orders, and earnings from one place.</p>
-        <div className="seller-brand-points">
-          <span>✓ Track store performance</span>
-          <span>✓ Manage products and orders</span>
-          <span>✓ Access your wallet securely</span>
-        </div>
-      </section>
-
-      <section className="seller-login-area">
+      <section className="seller-login-shell">
+        <header><span /> <strong>{registering ? 'Registration' : 'Login'}</strong><button type="button" aria-label="Language">◎</button></header>
         <div className="seller-login-card">
           <div className="seller-login-heading">
-            <span className="seller-mobile-mark">S</span>
-            <h2>Welcome back</h2>
-            <p>Sign in to the MarketHub demo seller portal</p>
+            <span className="seller-mobile-mark">M</span>
+            <h1>MarketHub Online Shop</h1>
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="seller-demo-login"><strong>Seller account</strong><span>seller@demo.com</span><span>Use the password created in Supabase</span></div>
+          <form onSubmit={registering ? handleRegister : handleLogin}>
+            {registering && <><label htmlFor="seller-store-name">Store Name</label><input id="seller-store-name" type="text" placeholder="Enter your store name" value={storeName} onChange={(event) => setStoreName(event.target.value)} required /></>}
+            <label htmlFor="seller-email">Email Address</label>
+            <input id="seller-email" type="email" placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <label htmlFor="seller-password">Password</label>
+            <input id="seller-password" type="password" minLength="6" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             {error && <p className="seller-login-error">{error}</p>}
-            <label htmlFor="seller-email">EMAIL ADDRESS</label>
-            <input id="seller-email" type="email" placeholder="seller@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required />
-
-            <label htmlFor="seller-password">PASSWORD</label>
-            <div className="seller-password-field">
-              <input id="seller-password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'}>◉</button>
-            </div>
-
-            <div className="seller-login-options">
-              <label><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me</label>
-              <button type="button">Forgot password?</button>
-            </div>
-
-            <button className="seller-sign-in-btn" type="submit" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in to MarketHub'}</button>
+            {notice && <p className="seller-login-notice">{notice}</p>}
+            <button className="seller-sign-in-btn" type="submit" disabled={submitting}>{submitting ? 'Please wait…' : registering ? 'Register' : 'Login'}</button>
           </form>
-
-          <div className="seller-login-footer">
-            <span>Not a seller?</span>
-            <a href="/admin">Admin login</a>
-            <span>·</span>
-            <a href="/agent">Agent login</a>
-          </div>
+          <div className="seller-login-divider"><span>or</span></div>
+          <button className="seller-register-btn" type="button" onClick={() => switchMode(!registering)}>{registering ? 'Back to Login' : 'Register Now'}</button>
         </div>
       </section>
     </main>
