@@ -10,7 +10,7 @@ const loadAddresses = () => {
   }
 };
 
-export default function SellerDigitalCurrency({ onBack }) {
+export default function SellerDigitalCurrency({ onBack, client = sellerSupabase, sellerId }) {
   const saved = loadAddresses();
   const [form, setForm] = useState({
     trc20: saved.trc20 || '',
@@ -25,8 +25,9 @@ export default function SellerDigitalCurrency({ onBack }) {
     event.preventDefault();
     const { tradePassword, ...addresses } = form;
     localStorage.setItem('seller_digital_currency', JSON.stringify(addresses));
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    await sellerSupabase.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'digital_currency',details:addresses,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+    const { error } = await client.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'digital_currency',details:addresses,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    if (error) { setNotice(error.message); return; }
     setNotice('Digital currency addresses saved.');
     setForm((current) => ({ ...current, tradePassword: '' }));
     window.setTimeout(() => setNotice(''), 2200);

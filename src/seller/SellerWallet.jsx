@@ -44,11 +44,11 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   const visibleTransactions = useMemo(() => filter === 'All' ? sourceTransactions : sourceTransactions.filter((item) => item.type === filter), [filter, sourceTransactions]);
 
   if (walletView === 'recharge') return <SellerRecharge client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
-  if (walletView === 'withdraw') return <SellerWithdraw onBack={() => setWalletView('wallet')} />;
-  if (walletView === 'withdraw-records') return <SellerWithdraw recordsOnly onBack={() => setWalletView('wallet')} onNewWithdrawal={() => setWalletView('withdraw')} />;
-  if (walletView === 'bank-card') return <SellerBankCard onBack={() => setWalletView('wallet')} />;
-  if (walletView === 'e-wallet') return <SellerEWallet onBack={() => setWalletView('wallet')} />;
-  if (walletView === 'digital-currency') return <SellerDigitalCurrency onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'withdraw') return <SellerWithdraw client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'withdraw-records') return <SellerWithdraw client={client} sellerId={sellerId} recordsOnly onBack={() => setWalletView('wallet')} onNewWithdrawal={() => setWalletView('withdraw')} />;
+  if (walletView === 'bank-card') return <SellerBankCard client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'e-wallet') return <SellerEWallet client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'digital-currency') return <SellerDigitalCurrency client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
   if (walletView === 'trade-password') return <SellerTradePassword onBack={() => setWalletView('wallet')} />;
   if (walletView === 'change-password') return <SellerChangePassword onBack={() => setWalletView('wallet')} />;
 

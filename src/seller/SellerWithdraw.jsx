@@ -17,7 +17,7 @@ const loadSavedRecords = () => {
   }
 };
 
-export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithdrawal }) {
+export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithdrawal, client = sellerSupabase, sellerId }) {
   const [method, setMethod] = useState('');
   const [account, setAccount] = useState('');
   const [amount, setAmount] = useState('');
@@ -36,7 +36,7 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   };
   const loadSellerRestrictions = async (sellerId) => {
     if (!sellerId) return null;
-    const { data, error } = await sellerSupabase
+    const { data, error } = await client
       .from('profiles')
       .select('allow_withdraw,bank_card_locked')
       .eq('id', sellerId)
@@ -48,13 +48,14 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
     return data;
   };
   const loadCloudRecords = async () => {
-    const { data } = await sellerSupabase.from('withdrawals').select('*').order('created_at',{ascending:false});
+    if (!sellerId) return;
+    const { data } = await client.from('withdrawals').select('*').eq('seller_id', sellerId).order('created_at',{ascending:false});
     if(data?.length) setRecords(data.map((item)=>({id:String(item.id).slice(0,8).toUpperCase()+'...',dbId:item.id,amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),updated:new Date(item.updated_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
   };
   const loadSavedMethods = async () => {
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    if (!auth?.user) return;
-    const { data } = await sellerSupabase.from('payment_methods').select('method_type,details').eq('seller_id', auth.user.id);
+    const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+    if (!effectiveSellerId) return;
+    const { data } = await client.from('payment_methods').select('method_type,details').eq('seller_id', effectiveSellerId);
     const map = {};
     (data || []).forEach((row) => {
       if (row.method_type === 'bank_card') map['Bank Card'] = [row.details?.name, row.details?.bankName, row.details?.cardNumber].filter(Boolean).join(' · ');
@@ -63,11 +64,11 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
     });
     setSavedMethods(map);
   };
-  useEffect(() => { loadCloudRecords(); loadSavedMethods(); }, []);
+  useEffect(() => { loadCloudRecords(); loadSavedMethods(); }, [client, sellerId]);
 
   const selectMethod = async (selectedMethod) => {
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    const restrictions = await loadSellerRestrictions(auth?.user?.id);
+    const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+    const restrictions = await loadSellerRestrictions(effectiveSellerId);
     if (!restrictions) return;
     if (restrictions.allow_withdraw === false) {
       setMethodPickerOpen(false);
@@ -88,12 +89,12 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
 
   const submit = async (event) => {
     event.preventDefault();
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    if (!auth?.user) {
+    const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+    if (!effectiveSellerId) {
       showNotice('Your session has expired. Please sign in again.');
       return;
     }
-    const restrictions = await loadSellerRestrictions(auth.user.id);
+    const restrictions = await loadSellerRestrictions(effectiveSellerId);
     if (!restrictions) return;
     if (restrictions.allow_withdraw === false) {
       showNotice('Your withdrawals have been locked. Please contact your agent.');
@@ -103,7 +104,7 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
       showNotice('Your bank card has been temporarily locked. Please contact your agent.');
       return;
     }
-    const { data, error } = await sellerSupabase.from('withdrawals').insert({seller_id:auth.user.id,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
+    const { data, error } = await client.from('withdrawals').insert({seller_id:effectiveSellerId,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
     if (error) { showNotice(`Could not submit withdrawal: ${error.message}`); return; }
     const idLabel = data?.id != null ? String(data.id).slice(0, 8).toUpperCase() + '...' : `${Date.now().toString(16).toUpperCase().slice(-8)}...`;
     const record = { id: idLabel, dbId:data?.id,amount: Number(amount), method, account, date: new Date(data?.created_at||Date.now()).toLocaleString(), status: 'Pending' };

@@ -14,7 +14,7 @@ const getSelections = (catalog) => {
   } catch { return catalog.slice(0, 2).map((product) => ({ id: product.id, onShelf: true })); }
 };
 
-export default function SellerShowcase({ onBack, shopLocked = false }) {
+export default function SellerShowcase({ onBack, shopLocked = false, client = sellerSupabase, sellerId }) {
   const [catalog, setCatalog] = useState(getCatalog);
   const [selections, setSelections] = useState(() => getSelections(getCatalog()));
   const [category, setCategory] = useState('All');
@@ -24,19 +24,19 @@ export default function SellerShowcase({ onBack, shopLocked = false }) {
 
   useEffect(() => {
     const loadCloudShowcase = async () => {
-      const { data: auth } = await sellerSupabase.auth.getUser();
-      const { data: products } = await sellerSupabase.from('products').select('*').order('created_at', { ascending:false });
+      const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+      const { data: products } = await client.from('products').select('*').order('created_at', { ascending:false });
       if (products?.length) {
         const mapped = products.map((item) => ({dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,onShelf:item.admin_on_shelf}));
         setCatalog(mapped);
-        const { data: selected } = await sellerSupabase.from('showcase_products').select('product_id,on_shelf').eq('seller_id', auth.user.id);
+        const { data: selected } = await client.from('showcase_products').select('product_id,on_shelf').eq('seller_id', auth.user.id);
         if (selected?.length) setSelections(selected.map((item) => ({id:mapped.find((product) => product.dbId === item.product_id)?.id,onShelf:item.on_shelf})).filter((item) => item.id));
       }
     };
     loadCloudShowcase();
-    const channel = sellerSupabase.channel('seller-live-showcase').on('postgres_changes',{event:'*',schema:'public',table:'products'},loadCloudShowcase).on('postgres_changes',{event:'*',schema:'public',table:'showcase_products'},loadCloudShowcase).subscribe();
-    return () => sellerSupabase.removeChannel(channel);
-  }, []);
+    const channel = client.channel(`seller-live-showcase-${sellerId || 'self'}`).on('postgres_changes',{event:'*',schema:'public',table:'products'},loadCloudShowcase).on('postgres_changes',{event:'*',schema:'public',table:'showcase_products'},loadCloudShowcase).subscribe();
+    return () => client.removeChannel(channel);
+  }, [client, sellerId]);
 
   const saveSelections = (next) => { setSelections(next); localStorage.setItem('seller_showcase_products', JSON.stringify(next)); };
   const selectedProducts = useMemo(() => selections.map((selection) => {
@@ -48,8 +48,8 @@ export default function SellerShowcase({ onBack, shopLocked = false }) {
 
   const addProduct = async (product) => {
     saveSelections([...selections, { id: product.id, onShelf: true }]);
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    await sellerSupabase.from('showcase_products').upsert({seller_id:auth.user.id,product_id:product.dbId,on_shelf:true});
+    const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+    await client.from('showcase_products').upsert({seller_id:auth.user.id,product_id:product.dbId,on_shelf:true});
     setNotice(`${product.id} added to your showcase.`);
     window.setTimeout(() => setNotice(''), 1800);
   };
@@ -58,8 +58,8 @@ export default function SellerShowcase({ onBack, shopLocked = false }) {
     const selection = selections.find((item) => item.id === id);
     const onShelf = !selection.onShelf;
     saveSelections(selections.map((item) => item.id === id ? { ...item, onShelf } : item));
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    await sellerSupabase.from('showcase_products').update({on_shelf:onShelf}).eq('seller_id',auth.user.id).eq('product_id',product.dbId);
+    const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+    await client.from('showcase_products').update({on_shelf:onShelf}).eq('seller_id',auth.user.id).eq('product_id',product.dbId);
   };
   const refreshCatalog = () => setCatalog(getCatalog());
 

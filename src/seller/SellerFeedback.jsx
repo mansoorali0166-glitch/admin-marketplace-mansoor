@@ -7,7 +7,7 @@ const loadTickets = () => {
   try { return JSON.parse(localStorage.getItem('seller_feedback_tickets')) || initialTickets; } catch { return initialTickets; }
 };
 
-export default function SellerFeedback({ onBack }) {
+export default function SellerFeedback({ onBack, client = sellerSupabase, sellerId }) {
   const [tab, setTab] = useState('Submit');
   const [type, setType] = useState('Suggestion');
   const [title, setTitle] = useState('');
@@ -15,15 +15,16 @@ export default function SellerFeedback({ onBack }) {
   const [tickets, setTickets] = useState(loadTickets);
   const [notice, setNotice] = useState('');
   useEffect(() => {
-    sellerSupabase.from('feedback_tickets').select('*').order('created_at',{ascending:false}).then(({data}) => {
+    client.from('feedback_tickets').select('*').eq('seller_id', sellerId).order('created_at',{ascending:false}).then(({data}) => {
       if (data?.length) setTickets(data.map((item) => ({id:item.id,title:item.title,seller:'Khan321',type:item.type,date:new Date(item.created_at).toLocaleDateString(),status:item.status,message:item.message})));
     });
-  }, []);
+  }, [client, sellerId]);
 
   const submit = async (event) => {
     event.preventDefault();
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    const { data } = await sellerSupabase.from('feedback_tickets').insert({seller_id:auth.user.id,title:title.trim(),type,message:message.trim(),status:'Open'}).select().single();
+    const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+    const { data, error } = await client.from('feedback_tickets').insert({seller_id:effectiveSellerId,title:title.trim(),type,message:message.trim(),status:'Open'}).select().single();
+    if (error) { setNotice(error.message); return; }
     const ticket = { id: data?.id || Date.now(), title: title.trim(), seller: 'Khan321', type, date: new Date(data?.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), status: 'Open', message: message.trim() };
     const next = [ticket, ...tickets];
     setTickets(next);

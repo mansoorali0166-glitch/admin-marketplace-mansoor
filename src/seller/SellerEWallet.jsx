@@ -10,7 +10,7 @@ const loadWallet = () => {
   }
 };
 
-export default function SellerEWallet({ onBack }) {
+export default function SellerEWallet({ onBack, client = sellerSupabase, sellerId }) {
   const saved = loadWallet();
   const [form, setForm] = useState({
     name: saved.name || '',
@@ -26,8 +26,9 @@ export default function SellerEWallet({ onBack }) {
     event.preventDefault();
     const { tradePassword, ...walletDetails } = form;
     localStorage.setItem('seller_e_wallet', JSON.stringify(walletDetails));
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    await sellerSupabase.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'e_wallet',details:walletDetails,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+    const { error } = await client.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'e_wallet',details:walletDetails,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    if (error) { setNotice(error.message); return; }
     setNotice('E-Wallet successfully bound.');
     setForm((current) => ({ ...current, tradePassword: '' }));
     window.setTimeout(() => setNotice(''), 2200);

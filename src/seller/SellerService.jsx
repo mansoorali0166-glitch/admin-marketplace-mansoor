@@ -6,28 +6,28 @@ const loadMessages = () => {
   try { return JSON.parse(localStorage.getItem('seller_service_messages')) || []; } catch { return []; }
 };
 
-export default function SellerService({ onBack }) {
+export default function SellerService({ onBack, client = sellerSupabase, sellerId }) {
   const [messages, setMessages] = useState(loadMessages);
   const [message, setMessage] = useState('');
   const fileInput = useRef(null);
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await sellerSupabase.auth.getUser();
-      const { data } = await sellerSupabase.from('messages').select('*').eq('channel','service').order('created_at');
-      if(data?.length) setMessages(data.map((item)=>({id:item.id,sender:item.sender_id === auth.user.id ? 'seller' : 'support',text:item.body,image:item.image_url,time:new Date(item.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})})));
+      const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+      const { data } = await client.from('messages').select('*').eq('channel','service').or(`sender_id.eq.${effectiveSellerId},recipient_id.eq.${effectiveSellerId}`).order('created_at');
+      if(data?.length) setMessages(data.map((item)=>({id:item.id,sender:item.sender_id === effectiveSellerId ? 'seller' : 'support',text:item.body,image:item.image_url,time:new Date(item.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})})));
     };
     load();
-    const channel=sellerSupabase.channel('seller-service').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},load).subscribe();
-    return ()=>sellerSupabase.removeChannel(channel);
-  },[]);
+    const channel=client.channel(`seller-service-${sellerId || 'self'}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},load).subscribe();
+    return ()=>client.removeChannel(channel);
+  },[client, sellerId]);
 
   const saveMessage = async (event) => {
     event.preventDefault();
     if (!message.trim()) return;
     const nextMessage = { id: Date.now(), sender: 'seller', text: message.trim(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    const { data: admins } = await sellerSupabase.from('profiles').select('id').eq('role','admin').limit(1);
-    const { data } = await sellerSupabase.from('messages').insert({sender_id:auth.user.id,recipient_id:admins?.[0]?.id,channel:'service',body:message.trim()}).select().single();
+    const effectiveSellerId = sellerId || (await client.auth.getUser()).data.user?.id;
+    const { data: admins } = await client.from('profiles').select('id').eq('role','admin').limit(1);
+    const { data } = await client.from('messages').insert({sender_id:effectiveSellerId,recipient_id:admins?.[0]?.id,channel:'service',body:message.trim()}).select().single();
     if(data) nextMessage.id=data.id;
     const next = [...messages, nextMessage];
     setMessages(next);

@@ -10,7 +10,7 @@ const loadBankCard = () => {
   }
 };
 
-export default function SellerBankCard({ onBack }) {
+export default function SellerBankCard({ onBack, client = sellerSupabase, sellerId }) {
   const saved = loadBankCard();
   const [form, setForm] = useState({
     name: saved.name || 'Khan',
@@ -27,8 +27,9 @@ export default function SellerBankCard({ onBack }) {
     event.preventDefault();
     const { tradePassword, ...bankCard } = form;
     localStorage.setItem('seller_bank_card', JSON.stringify(bankCard));
-    const { data: auth } = await sellerSupabase.auth.getUser();
-    await sellerSupabase.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'bank_card',details:bankCard,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
+    const { error } = await client.from('payment_methods').upsert({seller_id:auth.user.id,method_type:'bank_card',details:bankCard,updated_at:new Date().toISOString()},{onConflict:'seller_id,method_type'});
+    if (error) { setNotice(error.message); return; }
     setNotice('Bank card successfully bound.');
     setForm((current) => ({ ...current, tradePassword: '' }));
     window.setTimeout(() => setNotice(''), 2200);
