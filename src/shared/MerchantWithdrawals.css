@@ -1,0 +1,20 @@
+.merchant-finance-modal.merchant-withdrawals { width: min(760px, 100%); }
+.merchant-modal-success { padding: 8px; border: 1px solid #a7f3d0; border-radius: 7px; background: #ecfdf5; color: #047857; font-size: 11px; }
+.merchant-withdraw-list { display: grid; gap: 9px; max-height: 430px; overflow: auto; }
+.merchant-withdraw-list article { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; gap: 12px; align-items: center; padding: 13px; border: 1px solid #e5eaf0; border-radius: 11px; background: #fff; }
+.merchant-withdraw-list article > div { display: grid; gap: 3px; }
+.merchant-withdraw-list article strong { font-size: 16px; }
+.merchant-withdraw-list article span, .merchant-withdraw-list article time, .merchant-withdraw-list article small { color: #7b8798; font-size: 11px; }
+.merchant-withdraw-list article > em { padding: 5px 9px; border-radius: 999px; font-size: 11px; font-style: normal; }
+.merchant-withdraw-list article > em.pending { background: #fff7e5; color: #d97706; }
+.merchant-withdraw-list article > em.approved { background: #e8f9ef; color: #059669; }
+.merchant-withdraw-list article > em.rejected { background: #fff0f0; color: #ef4444; }
+.merchant-withdraw-actions { display: flex; gap: 6px; }
+.merchant-withdraw-actions button { border: 0; border-radius: 7px; padding: 8px 10px; font-weight: 700; cursor: pointer; }
+.merchant-withdraw-actions button:first-child { background: #e8f9ef; color: #059669; }
+.merchant-withdraw-actions button:last-child { background: #fff0f0; color: #ef4444; }
+.merchant-withdraw-actions button:disabled { opacity: .5; }
+.merchant-withdraw-empty { padding: 35px; text-align: center; color: #98a2b3; }
+.merchant-withdraw-reject { margin-top: 12px; padding: 12px; border: 1px solid #fecaca; border-radius: 11px; background: #fff7f7; }
+.merchant-withdraw-reject textarea { min-height: 72px; resize: vertical; }
+@media (max-width: 620px) { .merchant-withdraw-list article { grid-template-columns: 1fr; } .merchant-withdraw-actions { justify-content: flex-start; } }

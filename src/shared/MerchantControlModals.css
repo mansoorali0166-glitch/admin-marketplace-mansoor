@@ -172,6 +172,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex: 1;
 }
 .control-products span {
   font-size: 11px;
@@ -179,6 +180,28 @@
 }
 .control-products b {
   color: #079669;
+}
+.control-products.product-picker article > button {
+  align-self: center;
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: #2f66ed;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.control-products.product-picker article > button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.control-success {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 9px;
+  font-size: 12px;
 }
 .control-empty {
   min-height: 150px;
