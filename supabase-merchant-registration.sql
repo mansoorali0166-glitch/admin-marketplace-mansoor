@@ -4,6 +4,7 @@
 alter table public.profiles add column if not exists agent_id uuid references public.profiles(id);
 alter table public.profiles add column if not exists allow_login boolean not null default true;
 alter table public.profiles add column if not exists address text;
+alter table public.profiles add column if not exists phone text;
 alter table public.profiles add column if not exists invitation_code text;
 alter table public.profiles add column if not exists registration_status text not null default 'Approved'
   check (registration_status in ('Pending','Approved','Rejected'));
@@ -26,10 +27,13 @@ create table if not exists public.merchant_applications (
   name text not null,
   email text not null,
   address text not null,
+  phone text not null default '',
   status text not null default 'Pending' check (status in ('Pending','Approved','Rejected')),
   created_at timestamptz not null default now(),
   decided_at timestamptz
 );
+
+alter table public.merchant_applications add column if not exists phone text not null default '';
 
 alter table public.merchant_applications enable row level security;
 drop policy if exists "applications seller read own" on public.merchant_applications;
@@ -68,6 +72,34 @@ revoke all on function public.submit_merchant_application(text,text) from public
 revoke all on function public.decide_merchant_application(uuid,text) from public;
 grant execute on function public.submit_merchant_application(text,text) to authenticated;
 grant execute on function public.decide_merchant_application(uuid,text) to authenticated;
+
+create or replace function public.verify_agent_invitation_code(invitation_code_input text)
+returns boolean language sql stable security definer set search_path=public as $$
+  select exists(select 1 from public.profiles where role='agent' and upper(invitation_code)=upper(trim(invitation_code_input)));
+$$;
+
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path=public as $$
+declare selected_agent uuid; submitted_code text; submitted_role text;
+begin
+  submitted_role := coalesce(new.raw_user_meta_data->>'role','seller');
+  submitted_code := trim(coalesce(new.raw_user_meta_data->>'invitation_code',''));
+  if submitted_role='seller' and submitted_code<>'' then
+    select id into selected_agent from public.profiles where role='agent' and upper(invitation_code)=upper(submitted_code) limit 1;
+    if selected_agent is null then raise exception 'Invalid agent invitation code'; end if;
+    insert into public.profiles (id,email,display_name,role,agent_id,address,phone,allow_login,registration_status)
+    values (new.id,new.email,coalesce(new.raw_user_meta_data->>'display_name',split_part(new.email,'@',1)),'seller',selected_agent,coalesce(new.raw_user_meta_data->>'address',''),coalesce(new.raw_user_meta_data->>'phone',''),false,'Pending');
+    insert into public.merchant_applications (seller_id,agent_id,name,email,address,phone,status)
+    values (new.id,selected_agent,coalesce(new.raw_user_meta_data->>'display_name',split_part(new.email,'@',1)),new.email,coalesce(new.raw_user_meta_data->>'address',''),coalesce(new.raw_user_meta_data->>'phone',''),'Pending');
+  else
+    insert into public.profiles (id,email,display_name,role)
+    values (new.id,new.email,coalesce(new.raw_user_meta_data->>'display_name',split_part(new.email,'@',1)),submitted_role);
+  end if;
+  return new;
+end; $$;
+
+revoke all on function public.verify_agent_invitation_code(text) from public;
+grant execute on function public.verify_agent_invitation_code(text) to anon,authenticated;
 
 do $$ begin
   alter publication supabase_realtime add table public.merchant_applications;

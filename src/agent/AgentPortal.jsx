@@ -5457,7 +5457,7 @@ function AgentApplications() {
       </nav>
       {message && <p className="agent-application-message">{message}</p>}
       <section className="agent-application-list">
-        {visible.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{item.email}</span><small>{item.address}</small><time>{new Date(item.created_at).toLocaleString()}</time></div><em className={item.status.toLowerCase()}>{item.status}</em>{item.status === "Pending" && <span><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Approved")}>✓ Approve</button><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Rejected")}>× Deny</button></span>}</article>)}
+        {visible.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{item.email} · {item.phone || 'No phone'}</span><small>{item.address}</small><time>{new Date(item.created_at).toLocaleString()}</time></div><em className={item.status.toLowerCase()}>{item.status}</em>{item.status === "Pending" && <span><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Approved")}>✓ Approve</button><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Rejected")}>× Deny</button></span>}</article>)}
         {!visible.length && <div className="agent-applications-empty"><div>▱</div><p>{loading ? "Loading applications…" : `No ${tab.toLowerCase()} applications.`}</p></div>}
       </section>
     </div>
