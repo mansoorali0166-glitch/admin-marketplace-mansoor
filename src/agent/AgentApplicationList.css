@@ -1,0 +1,14 @@
+.agent-application-list { display: grid; gap: 10px; }
+.agent-application-list > article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; padding: 17px; border: 1px solid #d9e0e7; border-radius: 12px; background: #fff; }
+.agent-application-list article > div { display: grid; gap: 4px; }
+.agent-application-list article span, .agent-application-list article small, .agent-application-list article time { color: #7d899a; font-size: 12px; }
+.agent-application-list article > em { padding: 6px 10px; border-radius: 999px; font-size: 11px; font-style: normal; }
+.agent-application-list article > em.pending { background: #fff7e5; color: #d97706; }
+.agent-application-list article > em.rejected { background: #fff0f0; color: #ef4444; }
+.agent-application-list article > span { display: flex; gap: 7px; }
+.agent-application-list article > span button { border: 0; border-radius: 7px; padding: 9px 12px; font-weight: 700; cursor: pointer; }
+.agent-application-list article > span button:first-child { background: #e8f9ef; color: #059669; }
+.agent-application-list article > span button:last-child { background: #fff0f0; color: #ef4444; }
+.agent-application-message { padding: 10px; border: 1px solid #a7f3d0; border-radius: 8px; background: #ecfdf5; color: #047857; font-size: 12px; }
+.agent-application-list .agent-applications-empty { height: 202px; }
+@media (max-width: 720px) { .agent-application-list > article { grid-template-columns: 1fr; } .agent-application-list article > span { justify-content: flex-start; } }

@@ -1,0 +1,75 @@
+-- Run once in Supabase Dashboard > SQL Editor.
+-- Adds seller applications tied to an agent invitation code.
+
+alter table public.profiles add column if not exists agent_id uuid references public.profiles(id);
+alter table public.profiles add column if not exists allow_login boolean not null default true;
+alter table public.profiles add column if not exists address text;
+alter table public.profiles add column if not exists invitation_code text;
+alter table public.profiles add column if not exists registration_status text not null default 'Approved'
+  check (registration_status in ('Pending','Approved','Rejected'));
+
+with ranked_agents as (
+  select id,row_number() over (order by created_at,id) as position
+  from public.profiles where role='agent' and invitation_code is null
+)
+update public.profiles profile
+set invitation_code = case when ranked_agents.position=1 then 'P516326U' else 'P' || upper(substr(replace(profile.id::text, '-', ''), 1, 8)) end
+from ranked_agents where profile.id=ranked_agents.id;
+
+create unique index if not exists profiles_invitation_code_unique
+on public.profiles (upper(invitation_code)) where invitation_code is not null;
+
+create table if not exists public.merchant_applications (
+  id uuid primary key default gen_random_uuid(),
+  seller_id uuid not null unique references public.profiles(id) on delete cascade,
+  agent_id uuid not null references public.profiles(id),
+  name text not null,
+  email text not null,
+  address text not null,
+  status text not null default 'Pending' check (status in ('Pending','Approved','Rejected')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+
+alter table public.merchant_applications enable row level security;
+drop policy if exists "applications seller read own" on public.merchant_applications;
+drop policy if exists "applications agent read assigned" on public.merchant_applications;
+create policy "applications seller read own" on public.merchant_applications for select to authenticated using (seller_id=auth.uid());
+create policy "applications agent read assigned" on public.merchant_applications for select to authenticated using (agent_id=auth.uid() and public.is_agent());
+
+create or replace function public.submit_merchant_application(invitation_code_input text, address_input text)
+returns uuid language plpgsql security definer set search_path=public as $$
+declare selected_agent uuid; application_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Sign in is required to submit an application'; end if;
+  select id into selected_agent from public.profiles where role='agent' and upper(invitation_code)=upper(trim(invitation_code_input)) limit 1;
+  if selected_agent is null then raise exception 'Invalid agent invitation code'; end if;
+  update public.profiles set agent_id=selected_agent, address=trim(address_input), allow_login=false, registration_status='Pending' where id=auth.uid() and role='seller';
+  if not found then raise exception 'Only seller accounts can apply'; end if;
+  insert into public.merchant_applications (seller_id,agent_id,name,email,address,status,created_at,decided_at)
+  select id,selected_agent,display_name,email,trim(address_input),'Pending',now(),null from public.profiles where id=auth.uid()
+  on conflict (seller_id) do update set agent_id=excluded.agent_id,name=excluded.name,email=excluded.email,address=excluded.address,status='Pending',created_at=now(),decided_at=null
+  returning id into application_id;
+  return application_id;
+end; $$;
+
+create or replace function public.decide_merchant_application(application_id_input uuid, decision_input text)
+returns void language plpgsql security definer set search_path=public as $$
+declare target_seller uuid;
+begin
+  if decision_input not in ('Approved','Rejected') then raise exception 'Invalid decision'; end if;
+  select seller_id into target_seller from public.merchant_applications where id=application_id_input and agent_id=auth.uid() and status='Pending';
+  if target_seller is null or not public.is_agent() then raise exception 'Application not found or not authorized'; end if;
+  update public.merchant_applications set status=decision_input,decided_at=now() where id=application_id_input;
+  update public.profiles set registration_status=decision_input,allow_login=(decision_input='Approved') where id=target_seller;
+end; $$;
+
+revoke all on function public.submit_merchant_application(text,text) from public;
+revoke all on function public.decide_merchant_application(uuid,text) from public;
+grant execute on function public.submit_merchant_application(text,text) to authenticated;
+grant execute on function public.decide_merchant_application(uuid,text) to authenticated;
+
+do $$ begin
+  alter publication supabase_realtime add table public.merchant_applications;
+exception when duplicate_object then null;
+end $$;

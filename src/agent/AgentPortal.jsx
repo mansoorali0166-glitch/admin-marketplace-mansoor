@@ -22,6 +22,7 @@ import "./AgentPortal.css";
 import "./AgentTeam.css";
 import "./AgentUnregistered.css";
 import "./AgentApplications.css";
+import "./AgentApplicationList.css";
 import "./AgentMerchantList.css";
 import "./AgentShowcase.css";
 import "./AgentBoundAddresses.css";
@@ -5123,7 +5124,7 @@ function AgentMerchantList() {
         agentSupabase
           .from("profiles")
           .select(
-            "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url",
+            "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url,registration_status",
           )
           .eq("role", "seller")
           .order("created_at", { ascending: false }),
@@ -5136,7 +5137,7 @@ function AgentMerchantList() {
       const retry = await agentSupabase
         .from("profiles")
         .select(
-          "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url",
+          "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url,registration_status",
         )
         .eq("role", "seller")
         .order("created_at", { ascending: false });
@@ -5157,7 +5158,7 @@ function AgentMerchantList() {
           return map.set(id, (map.get(id) || 0) + parseMoney(row.amount));
         }, new Map());
       setMerchants(
-        (profileRes.data || []).map((profile) => {
+        (profileRes.data || []).filter((profile) => !profile.registration_status || profile.registration_status === "Approved").map((profile) => {
           const id = String(profile.id);
           const total = balances.has(id) ? balances.get(id) : 0;
           return {
@@ -5396,13 +5397,45 @@ function AgentMerchantList() {
 
 function AgentApplications() {
   const [tab, setTab] = useState("Pending");
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState("");
+  const [message, setMessage] = useState("");
+  const [inviteCode, setInviteCode] = useState("P516326U");
+  const load = async () => {
+    setLoading(true);
+    const { data: auth } = await agentSupabase.auth.getUser();
+    if (auth.user) {
+      const [{ data: rows }, { data: profile }] = await Promise.all([
+        agentSupabase.from("merchant_applications").select("*").eq("agent_id", auth.user.id).order("created_at", { ascending: false }),
+        agentSupabase.from("profiles").select("invitation_code").eq("id", auth.user.id).maybeSingle(),
+      ]);
+      setApplications(rows || []);
+      if (profile?.invitation_code) setInviteCode(profile.invitation_code);
+    }
+    setLoading(false);
+  };
+  useEffect(() => {
+    load();
+    const channel = agentSupabase.channel("agent-registration-applications").on("postgres_changes", { event: "*", schema: "public", table: "merchant_applications" }, load).subscribe();
+    return () => agentSupabase.removeChannel(channel);
+  }, []);
+  const decide = async (application, decision) => {
+    setBusyId(application.id); setMessage("");
+    const { error } = await agentSupabase.rpc("decide_merchant_application", { application_id_input: application.id, decision_input: decision });
+    setBusyId("");
+    if (error) { setMessage(error.message); return; }
+    setMessage(decision === "Approved" ? "Merchant approved and added to Merchant List." : "Application denied.");
+    await load();
+  };
+  const visible = applications.filter((item) => item.status === tab);
   return (
     <div className="agent-applications-page">
       <header>
         <h2>Applications</h2>
         <p>
           Registration applications submitted with your invitation code{" "}
-          <strong>P516326U</strong>. Sellers cannot log in until you approve
+          <strong>{inviteCode}</strong>. Sellers cannot log in until you approve
           them.
         </p>
       </header>
@@ -5412,19 +5445,20 @@ function AgentApplications() {
           className={tab === "Pending" ? "active" : ""}
           onClick={() => setTab("Pending")}
         >
-          Pending (0)
+          Pending ({applications.filter((item) => item.status === "Pending").length})
         </button>
         <button
           type="button"
           className={tab === "Rejected" ? "active" : ""}
           onClick={() => setTab("Rejected")}
         >
-          Rejected (0)
+          Rejected ({applications.filter((item) => item.status === "Rejected").length})
         </button>
       </nav>
-      <section className="agent-applications-empty">
-        <div>▱</div>
-        <p>No {tab.toLowerCase()} applications.</p>
+      {message && <p className="agent-application-message">{message}</p>}
+      <section className="agent-application-list">
+        {visible.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{item.email}</span><small>{item.address}</small><time>{new Date(item.created_at).toLocaleString()}</time></div><em className={item.status.toLowerCase()}>{item.status}</em>{item.status === "Pending" && <span><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Approved")}>✓ Approve</button><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Rejected")}>× Deny</button></span>}</article>)}
+        {!visible.length && <div className="agent-applications-empty"><div>▱</div><p>{loading ? "Loading applications…" : `No ${tab.toLowerCase()} applications.`}</p></div>}
       </section>
     </div>
   );
