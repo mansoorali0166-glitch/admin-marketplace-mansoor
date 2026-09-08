@@ -5404,14 +5404,19 @@ function AgentApplications() {
   const [inviteCode, setInviteCode] = useState("P516326U");
   const load = async () => {
     setLoading(true);
+    setMessage("");
     const { data: auth } = await agentSupabase.auth.getUser();
     if (auth.user) {
-      const [{ data: rows }, { data: profile }] = await Promise.all([
+      const [{ data: rows, error: applicationsError }, { data: profile, error: profileError }] = await Promise.all([
         agentSupabase.from("merchant_applications").select("*").eq("agent_id", auth.user.id).order("created_at", { ascending: false }),
         agentSupabase.from("profiles").select("invitation_code").eq("id", auth.user.id).maybeSingle(),
       ]);
       setApplications(rows || []);
       if (profile?.invitation_code) setInviteCode(profile.invitation_code);
+      if (applicationsError || profileError) setMessage(applicationsError?.message || profileError.message);
+    } else {
+      setApplications([]);
+      setMessage("Your agent session has expired. Please sign in again.");
     }
     setLoading(false);
   };

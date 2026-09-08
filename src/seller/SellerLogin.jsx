@@ -47,9 +47,23 @@ export default function SellerLogin({ onLoginSuccess }) {
     const { data: validCode, error: verifyError } = await sellerSupabase.rpc('verify_agent_invitation_code', { invitation_code_input: normalizedCode });
     if (verifyError || !validCode) { setError(verifyError?.message || 'Invalid agent verification code.'); setSubmitting(false); return; }
     const { data, error: authError } = await sellerSupabase.auth.signUp({ email, password, options: { data: { display_name: storeName.trim(), role: 'seller', phone: phone.trim(), address: address.trim(), invitation_code: normalizedCode } } });
+    if (authError) {
+      setSubmitting(false);
+      setError(authError.code === 'over_email_send_rate_limit'
+        ? 'Registration is temporarily blocked by the Supabase email limit. The project owner must disable Confirm Email because agent approval verifies merchant accounts.'
+        : authError.message);
+      return;
+    }
+    if (!data.user || data.user.identities?.length === 0) {
+      if (data.session) await sellerSupabase.auth.signOut();
+      setSubmitting(false);
+      setError('This email is already registered. Please log in or use another email address.');
+      return;
+    }
+    const { error: applicationError } = await sellerSupabase.rpc('ensure_merchant_application', { seller_id_input: data.user.id, invitation_code_input: normalizedCode });
     if (data.session) await sellerSupabase.auth.signOut();
     setSubmitting(false);
-    if (authError) { setError(authError.message); return; }
+    if (applicationError) { setError(applicationError.message); return; }
     setVerifying(false);
     setNotice('Application submitted successfully. Your agent must approve it before you can log in.');
   };

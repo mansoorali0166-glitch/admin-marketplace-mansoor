@@ -66,6 +66,9 @@ begin
   if target_seller is null or not public.is_agent() then raise exception 'Application not found or not authorized'; end if;
   update public.merchant_applications set status=decision_input,decided_at=now() where id=application_id_input;
   update public.profiles set registration_status=decision_input,allow_login=(decision_input='Approved') where id=target_seller;
+  if decision_input='Approved' then
+    update auth.users set email_confirmed_at=coalesce(email_confirmed_at,now()) where id=target_seller;
+  end if;
 end; $$;
 
 revoke all on function public.submit_merchant_application(text,text) from public;
@@ -77,6 +80,43 @@ create or replace function public.verify_agent_invitation_code(invitation_code_i
 returns boolean language sql stable security definer set search_path=public as $$
   select exists(select 1 from public.profiles where role='agent' and upper(invitation_code)=upper(trim(invitation_code_input)));
 $$;
+
+create or replace function public.ensure_merchant_application(seller_id_input uuid, invitation_code_input text)
+returns uuid language plpgsql security definer set search_path=public,auth as $$
+declare selected_agent uuid; selected_user auth.users%rowtype; application_id uuid;
+begin
+  select * into selected_user
+  from auth.users
+  where id=seller_id_input
+    and coalesce(raw_user_meta_data->>'role','')='seller'
+    and upper(trim(raw_user_meta_data->>'invitation_code'))=upper(trim(invitation_code_input));
+  if selected_user.id is null then raise exception 'Registration could not be verified. Please register again.'; end if;
+  select id into selected_agent from public.profiles
+  where role='agent' and upper(invitation_code)=upper(trim(invitation_code_input)) limit 1;
+  if selected_agent is null then raise exception 'Invalid agent invitation code'; end if;
+
+  insert into public.profiles (id,email,display_name,role,agent_id,address,phone,allow_login,registration_status)
+  values (selected_user.id,selected_user.email,
+    coalesce(selected_user.raw_user_meta_data->>'display_name',split_part(selected_user.email,'@',1)),
+    'seller',selected_agent,coalesce(selected_user.raw_user_meta_data->>'address',''),
+    coalesce(selected_user.raw_user_meta_data->>'phone',''),false,'Pending')
+  on conflict (id) do update set agent_id=excluded.agent_id,address=excluded.address,phone=excluded.phone,
+    allow_login=case when public.profiles.registration_status='Approved' then public.profiles.allow_login else false end,
+    registration_status=case when public.profiles.registration_status='Approved' then 'Approved' else 'Pending' end;
+
+  insert into public.merchant_applications (seller_id,agent_id,name,email,address,phone,status,created_at,decided_at)
+  values (selected_user.id,selected_agent,
+    coalesce(selected_user.raw_user_meta_data->>'display_name',split_part(selected_user.email,'@',1)),
+    selected_user.email,coalesce(selected_user.raw_user_meta_data->>'address',''),
+    coalesce(selected_user.raw_user_meta_data->>'phone',''),'Pending',now(),null)
+  on conflict (seller_id) do update set
+    agent_id=excluded.agent_id,name=excluded.name,email=excluded.email,address=excluded.address,phone=excluded.phone,
+    status=case when public.merchant_applications.status='Approved' then 'Approved' else 'Pending' end,
+    created_at=case when public.merchant_applications.status='Approved' then public.merchant_applications.created_at else now() end,
+    decided_at=case when public.merchant_applications.status='Approved' then public.merchant_applications.decided_at else null end
+  returning id into application_id;
+  return application_id;
+end; $$;
 
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path=public as $$
@@ -99,7 +139,64 @@ begin
 end; $$;
 
 revoke all on function public.verify_agent_invitation_code(text) from public;
+revoke all on function public.ensure_merchant_application(uuid,text) from public;
 grant execute on function public.verify_agent_invitation_code(text) to anon,authenticated;
+grant execute on function public.ensure_merchant_application(uuid,text) to anon,authenticated;
+
+-- Repair verified seller sign-ups created before this trigger version was installed.
+with registration_users as (
+  select users.id,users.email,
+    coalesce(users.raw_user_meta_data->>'display_name',split_part(users.email,'@',1)) as display_name,
+    coalesce(users.raw_user_meta_data->>'address','') as address,
+    coalesce(users.raw_user_meta_data->>'phone','') as phone,
+    agents.id as agent_id,users.created_at
+  from auth.users users
+  join public.profiles agents on agents.role='agent'
+    and upper(agents.invitation_code)=upper(trim(users.raw_user_meta_data->>'invitation_code'))
+  where coalesce(users.raw_user_meta_data->>'role','')='seller'
+)
+insert into public.profiles (id,email,display_name,role,agent_id,address,phone,allow_login,registration_status)
+select id,email,display_name,'seller',agent_id,address,phone,false,'Pending'
+from registration_users
+on conflict (id) do nothing;
+
+with registration_users as (
+  select users.id,
+    coalesce(users.raw_user_meta_data->>'address','') as address,
+    coalesce(users.raw_user_meta_data->>'phone','') as phone,
+    agents.id as agent_id
+  from auth.users users
+  join public.profiles agents on agents.role='agent'
+    and upper(agents.invitation_code)=upper(trim(users.raw_user_meta_data->>'invitation_code'))
+  where coalesce(users.raw_user_meta_data->>'role','')='seller'
+)
+update public.profiles profiles
+set agent_id=registration_users.agent_id,address=registration_users.address,
+    phone=registration_users.phone,allow_login=false,registration_status='Pending'
+from registration_users
+where profiles.id=registration_users.id
+  and not exists (select 1 from public.merchant_applications applications where applications.seller_id=profiles.id);
+
+insert into public.merchant_applications (seller_id,agent_id,name,email,address,phone,status,created_at)
+select users.id,agents.id,
+  coalesce(users.raw_user_meta_data->>'display_name',split_part(users.email,'@',1)),users.email,
+  coalesce(users.raw_user_meta_data->>'address',''),coalesce(users.raw_user_meta_data->>'phone',''),
+  'Pending',users.created_at
+from auth.users users
+join public.profiles agents on agents.role='agent'
+  and upper(agents.invitation_code)=upper(trim(users.raw_user_meta_data->>'invitation_code'))
+where coalesce(users.raw_user_meta_data->>'role','')='seller'
+on conflict (seller_id) do nothing;
+
+-- Agent approval is the final account verification step for merchant accounts.
+-- Repair sellers that were already approved before this migration version.
+update auth.users users
+set email_confirmed_at=coalesce(users.email_confirmed_at,now())
+from public.profiles profiles
+where profiles.id=users.id
+  and profiles.role='seller'
+  and profiles.registration_status='Approved'
+  and users.email_confirmed_at is null;
 
 do $$ begin
   alter publication supabase_realtime add table public.merchant_applications;
