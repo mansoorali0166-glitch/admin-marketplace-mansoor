@@ -131,12 +131,20 @@ create policy "balance locks admin agent update" on public.balance_locks for upd
 
 -- Agents operate the seller network between the administrator and seller portals.
 create policy "showcase agent read" on public.showcase_products for select to authenticated using (public.is_agent());
+create policy "showcase assigned agent insert" on public.showcase_products for insert to authenticated
+with check (public.is_agent() and exists (select 1 from public.profiles seller where seller.id=showcase_products.seller_id and seller.agent_id=auth.uid()));
+create policy "showcase assigned agent update" on public.showcase_products for update to authenticated
+using (public.is_agent() and exists (select 1 from public.profiles seller where seller.id=showcase_products.seller_id and seller.agent_id=auth.uid()))
+with check (public.is_agent() and exists (select 1 from public.profiles seller where seller.id=showcase_products.seller_id and seller.agent_id=auth.uid()));
 create policy "orders agent read" on public.orders for select to authenticated using (public.is_agent());
 create policy "orders agent update" on public.orders for update to authenticated using (public.is_agent()) with check (public.is_agent());
 create policy "orders agent insert" on public.orders for insert to authenticated with check (public.is_agent());
 create policy "feedback agent read" on public.feedback_tickets for select to authenticated using (public.is_agent());
 create policy "feedback agent update" on public.feedback_tickets for update to authenticated using (public.is_agent()) with check (public.is_agent());
 create policy "withdrawals agent read" on public.withdrawals for select to authenticated using (public.is_agent());
+create policy "withdrawals assigned agent update" on public.withdrawals for update to authenticated
+using (public.is_agent() and exists (select 1 from public.profiles seller where seller.id=withdrawals.seller_id and seller.agent_id=auth.uid()))
+with check (public.is_agent() and exists (select 1 from public.profiles seller where seller.id=withdrawals.seller_id and seller.agent_id=auth.uid()));
 create policy "transactions agent read" on public.wallet_transactions for select to authenticated using (public.is_agent());
 create policy "transactions agent insert" on public.wallet_transactions for insert to authenticated with check (public.is_agent());
 create policy "payments agent read" on public.payment_methods for select to authenticated using (public.is_agent());
