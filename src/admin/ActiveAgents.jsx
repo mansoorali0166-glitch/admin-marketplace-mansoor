@@ -1,267 +1,248 @@
-import React, { useState } from 'react';
-import './ActiveAgents.css';
+import React, { useEffect, useState } from "react";
+import "./ActiveAgents.css";
+import { adminSupabase } from "../shared/supabase";
 
-export default function ActiveAgents() {
-  const [search, setSearch] = useState('');
+export default function ActiveAgents({
+  onNavigateToChat,
+  onNavigateToMerchants,
+  onManageAgent,
+}) {
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-  const agents = [
-    {
-      id: 'AGT000005',
-      name: 'Test Agent',
-      email: 'agent@gmail.com',
-      company: '—',
-      invitationCode: '••••••••',
-      status: 'Active',
-      sellers: 1,
-      approved: 1,
-      pending: 0,
-      commission: '$0.00',
-      wallet: '$0.00',
-      lastLogin: 'Aug 12, 2026',
-      unread: 0,
-    },
-    {
-      id: 'AGT000004',
-      name: 'khan',
-      email: 'agent1000@gmail.com',
-      company: 'khan1',
-      invitationCode: '••••••••',
-      status: 'Active',
-      sellers: 3,
-      approved: 3,
-      pending: 0,
-      commission: '$0.00',
-      wallet: '$0.00',
-      lastLogin: 'Aug 16, 2026',
-      unread: 1,
-    },
-  ];
+  // Fetch active agents dynamically from Supabase
+  const loadActiveAgents = async () => {
+    setLoading(true);
+    try {
+      const { data: profiles, error } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("role", "agent")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (profiles) {
+        setAgents(
+          profiles
+            .filter((p) => p.role && p.role.toLowerCase() === "agent")
+            .filter((p) => !p.status || p.status.toLowerCase() === "active")
+            .map((p) => ({
+              id: p.id ? p.id.slice(0, 8).toUpperCase() : "AGT00000",
+              dbId: p.id,
+              name: p.display_name || p.full_name || p.email || "Active Agent",
+              email: p.email,
+              company: p.company_name || "—",
+              invitationCode: p.invitation_code || "••••••••",
+              status: p.status || "Active",
+              sellers: p.seller_count || 0,
+              approvedSellers: p.approved_sellers || 0,
+              pendingSellers: p.pending_sellers || 0,
+              commissionRate: p.commission_rate || 0,
+              walletBalance: p.wallet_balance || 0,
+              lastLogin: p.last_login
+                ? new Date(p.last_login).toLocaleDateString()
+                : "—",
+              unread: p.unread_messages || 0,
+            })),
+        );
+      }
+    } catch (err) {
+      console.error("Error loading active agents:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadActiveAgents();
+  }, []);
 
   const filteredAgents = agents.filter((agent) => {
-    const value = search.toLowerCase();
-
+    const val = search.toLowerCase();
     return (
-      agent.name.toLowerCase().includes(value) ||
-      agent.email.toLowerCase().includes(value) ||
-      agent.company.toLowerCase().includes(value) ||
-      agent.id.toLowerCase().includes(value)
+      agent.name.toLowerCase().includes(val) ||
+      agent.email.toLowerCase().includes(val) ||
+      agent.company.toLowerCase().includes(val) ||
+      agent.id.toLowerCase().includes(val)
     );
   });
 
+  // Calculate dynamic metrics from loaded data
+  const totalSellers = agents.reduce(
+    (sum, a) => sum + (Number(a.sellers) || 0),
+    0,
+  );
+  const totalApproved = agents.reduce(
+    (sum, a) => sum + (Number(a.approvedSellers) || 0),
+    0,
+  );
+  const totalWallet = agents.reduce(
+    (sum, a) => sum + (Number(a.walletBalance) || 0),
+    0,
+  );
+
   return (
     <div className="active-agents-page">
-
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
       <div className="active-agents-header">
-
         <div>
           <h2>Active Agents</h2>
-
           <p>
-            Create agents, manage invitation codes, and track their seller
+            Monitor currently active agents and their assigned merchant
             networks.
           </p>
         </div>
 
-        <div className="active-agent-header-actions">
-
-  <button className="active-agent-refresh">
-    ↻
-  </button>
-
-</div>
-
+        <button
+          className="agents-refresh-btn"
+          onClick={loadActiveAgents}
+          type="button"
+        >
+          ↻ Refresh
+        </button>
       </div>
 
+      {/* STATS SUMMARY */}
+      <div className="agent-stat-grid">
+        <div className="agent-stat-card">
+          <div className="agent-stat-icon">♙</div>
+          <strong>{agents.length}</strong>
+          <span>Active Agents</span>
+        </div>
+        <div className="agent-stat-card">
+          <div className="agent-stat-icon">♧</div>
+          <strong>{totalSellers}</strong>
+          <span>Linked Sellers</span>
+        </div>
+        <div className="agent-stat-card">
+          <div className="agent-stat-icon">✓</div>
+          <strong>{totalApproved}</strong>
+          <span>Approved Merchants</span>
+        </div>
+        <div className="agent-stat-card">
+          <div className="agent-stat-icon">$</div>
+          <strong>$ {totalWallet.toFixed(2)}</strong>
+          <span>Total Agent Wallets</span>
+        </div>
+      </div>
 
-      {/* ================= SEARCH ================= */}
-      <div className="active-agent-search">
-
-        <span>⌕</span>
-
+      {/* SEARCH BAR */}
+      <div className="agents-search-box">
+        <span className="agents-search-icon">⌕</span>
         <input
           type="text"
-          placeholder="Search agents by name, company, email or code"
+          placeholder="Search active agents by name, email, company or code..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-
       </div>
 
-
-      {/* ================= TABLE ================= */}
-      <div className="active-agent-table-wrapper">
-
-        <table className="active-agent-table">
-
+      {/* AGENTS TABLE */}
+      <div className="agents-table-wrapper">
+        <table className="agents-table">
           <thead>
-
             <tr>
               <th>AGENT</th>
               <th>COMPANY</th>
               <th>INVITATION CODE</th>
-              <th>STATUS</th>
               <th>SELLERS</th>
               <th>PENDING</th>
-              <th>COMMISSION</th>
-              <th>WALLET</th>
+              <th>COMMISSION RATE</th>
+              <th>WALLET BALANCE</th>
               <th>LAST LOGIN</th>
-              <th></th>
+              <th>ACTIONS</th>
             </tr>
-
           </thead>
-
-
           <tbody>
-
-            {filteredAgents.map((agent) => (
-
-              <tr key={agent.id}>
-
-                {/* AGENT */}
-                <td>
-
-                  <div className="active-agent-profile">
-
-                    <div className="active-agent-avatar">
-                      {agent.name.charAt(0).toUpperCase()}
-                    </div>
-
-                    <div className="active-agent-information">
-
-                      <strong>
-                        {agent.name}
-                      </strong>
-
-                      <span>
-                        {agent.email}
-                      </span>
-
-                      <small>
-                        {agent.id}
-                      </small>
-
-                    </div>
-
-                  </div>
-
-                </td>
-
-
-                {/* COMPANY */}
-                <td>
-                  {agent.company}
-                </td>
-
-
-                {/* INVITATION CODE */}
-                <td className="active-invitation-code">
-                  {agent.invitationCode}
-                </td>
-
-
-                {/* STATUS */}
-                <td>
-
-                  <span className="active-agent-status">
-                    {agent.status}
-                  </span>
-
-                </td>
-
-
-                {/* SELLERS */}
-                <td>
-
-                  <span className="active-seller-number">
-                    {agent.sellers}
-                  </span>
-
-                  <span className="active-seller-approved">
-                    ({agent.approved} approved)
-                  </span>
-
-                </td>
-
-
-                {/* PENDING */}
-                <td className="active-pending">
-                  {agent.pending}
-                </td>
-
-
-                {/* COMMISSION */}
-                <td>
-                  {agent.commission}
-                </td>
-
-
-                {/* WALLET */}
-                <td>
-                  {agent.wallet}
-                </td>
-
-
-                {/* LAST LOGIN */}
-                <td className="active-last-login">
-                  {agent.lastLogin}
-                </td>
-
-
-                {/* ACTIONS */}
-                <td>
-
-                  <div className="active-agent-actions">
-
-                    <button className="active-manage">
-                      Manage
-                    </button>
-
-                    <button className="active-view-merchants">
-                      ♧ View Merchants
-                    </button>
-
-                    <button className="active-message">
-                      ◯ Message
-
-                      {agent.unread > 0 && (
-                        <span className="active-message-count">
-                          {agent.unread}
-                        </span>
-                      )}
-
-                    </button>
-
-                  </div>
-
-                </td>
-
-              </tr>
-
-            ))}
-
-
-            {filteredAgents.length === 0 && (
-
+            {loading ? (
               <tr>
-
                 <td
-                  colSpan="10"
-                  className="active-no-agents"
+                  colSpan="9"
+                  style={{ textAlign: "center", padding: "2rem" }}
                 >
-                  No active agents found.
+                  Loading active agents from database...
                 </td>
-
               </tr>
-
+            ) : filteredAgents.length === 0 ? (
+              <tr>
+                <td
+                  colSpan="9"
+                  style={{ textAlign: "center", padding: "2rem" }}
+                >
+                  No active agents found in database.
+                </td>
+              </tr>
+            ) : (
+              filteredAgents.map((agent) => (
+                <tr key={agent.dbId || agent.id}>
+                  <td>
+                    <div className="agent-profile">
+                      <div className="agent-avatar">
+                        {agent.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="agent-profile-text">
+                        <strong>{agent.name}</strong>
+                        <span>{agent.email}</span>
+                        <small>{agent.id}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{agent.company}</td>
+                  <td className="invitation-code">{agent.invitationCode}</td>
+                  <td>
+                    <span className="seller-count">{agent.sellers}</span>
+                    <span className="seller-approved">
+                      {" "}
+                      ({agent.approvedSellers} approved)
+                    </span>
+                  </td>
+                  <td className="pending-count">{agent.pendingSellers}</td>
+                  <td>{agent.commissionRate}%</td>
+                  <td>$ {agent.walletBalance.toFixed(2)}</td>
+                  <td className="last-login">{agent.lastLogin}</td>
+                  <td>
+                    <div className="agent-actions">
+                      <button
+                        className="agent-action manage"
+                        type="button"
+                        onClick={() =>
+                          onManageAgent && onManageAgent(agent.dbId)
+                        }
+                      >
+                        Manage
+                      </button>
+                      <button
+                        className="agent-action merchants"
+                        type="button"
+                        onClick={() =>
+                          onNavigateToMerchants &&
+                          onNavigateToMerchants(agent.dbId)
+                        }
+                      >
+                        ♧ View Merchants
+                      </button>
+                      <button
+                        className="agent-action message"
+                        type="button"
+                        onClick={() =>
+                          onNavigateToChat && onNavigateToChat(agent.dbId)
+                        }
+                      >
+                        ◯ Message
+                        {agent.unread > 0 && (
+                          <span className="message-badge">{agent.unread}</span>
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             )}
-
           </tbody>
-
         </table>
-
       </div>
-
     </div>
   );
 }
