@@ -1,126 +1,158 @@
-import React, { useEffect, useState } from 'react';
-import './AllAgents.css';
-import { adminSupabase } from '../shared/supabase';
+import React, { useEffect, useState } from "react";
+import "./AllAgents.css";
+import { adminSupabase } from "../shared/supabase";
 
-export default function AllAgents({ openCreateAgent = false, onNavigateToChat, onNavigateToMerchants }) {
+export default function AllAgents({
+  openCreateAgent = false,
+  onNavigateToChat,
+  onNavigateToMerchants,
+}) {
   const [showNewAgentModal, setShowNewAgentModal] = useState(openCreateAgent);
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const [newAgent, setNewAgent] = useState({
-    fullName: '',
-    company: '',
-    email: '',
-    phone: '',
-    password: '',
+    fullName: "",
+    company: "",
+    email: "",
+    phone: "",
+    password: "",
     commission: 5,
-    status: 'Active',
+    status: "Active",
   });
 
+  // Load agents dynamically from Supabase (strictly excluding sellers/admins)
   const loadAgents = async () => {
     setLoading(true);
     try {
       const { data: profiles, error: fetchErr } = await adminSupabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'agent')
-        .order('created_at', { ascending: false });
+        .from("profiles")
+        .select("*")
+        .eq("role", "agent")
+        .order("created_at", { ascending: false });
 
       if (fetchErr) throw fetchErr;
 
       if (profiles) {
         setAgents(
           profiles
-            // Client-side filter to strictly exclude sellers
-            .filter((p) => p.role && p.role.toLowerCase() === 'agent')
+            // Strict client-side filter to guarantee non-agent roles are excluded
+            .filter((p) => p.role && p.role.toLowerCase() === "agent")
             .map((p) => ({
-              id: p.id ? p.id.slice(0, 8).toUpperCase() : 'AGT00000',
+              id: p.id ? p.id.slice(0, 8).toUpperCase() : "AGT00000",
               dbId: p.id,
-              name: p.display_name || p.full_name || p.email || 'Agent',
+              name: p.display_name || p.full_name || p.email || "Agent",
               email: p.email,
-              company: p.company_name || '—',
-              invitationCode: p.invitation_code || '••••••••',
-              status: p.status || 'Active',
+              company: p.company_name || "—",
+              invitationCode: p.invitation_code || "••••••••",
+              status: p.status || "Active",
               sellers: String(p.seller_count || 0),
               sellersDetail: `(${p.approved_sellers || 0} approved)`,
               pending: String(p.pending_sellers || 0),
               commission: `$ ${(p.commission_rate || 0).toFixed(2)}`,
               wallet: `$ ${(p.wallet_balance || 0).toFixed(2)}`,
-              lastLogin: p.last_login ? new Date(p.last_login).toLocaleDateString() : '—',
+              lastLogin: p.last_login
+                ? new Date(p.last_login).toLocaleDateString()
+                : "—",
               unread: p.unread_messages || 0,
-            }))
+            })),
         );
       }
     } catch (err) {
-      console.error('Error loading agents:', err);
+      console.error("Error loading agents:", err);
     } finally {
       setLoading(false);
     }
   };
 
-
   useEffect(() => {
     loadAgents();
   }, []);
 
+  // Handle actual agent creation in Supabase
   const handleCreateAgent = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    setError('');
+    setError("");
 
     try {
-      // 1. Create auth user in Supabase
-      const { data: authData, error: authErr } = await adminSupabase.auth.signUp({
-        email: newAgent.email,
-        password: newAgent.password,
-        options: {
-          data: {
-            display_name: newAgent.fullName,
-            role: 'agent',
+      let userId = null;
+
+      // 1. Register in Supabase Auth
+      const { data: authData, error: authErr } =
+        await adminSupabase.auth.signUp({
+          email: newAgent.email,
+          password: newAgent.password,
+          options: {
+            data: {
+              display_name: newAgent.fullName,
+              role: "agent",
+            },
           },
-        },
-      });
+        });
 
-      if (authErr) throw authErr;
+      if (authErr) {
+        if (authErr.message.includes("already registered")) {
+          // If auth user already exists, retrieve existing profile ID
+          const { data: existingProfile } = await adminSupabase
+            .from("profiles")
+            .select("id")
+            .eq("email", newAgent.email)
+            .maybeSingle();
 
-      const userId = authData.user?.id;
-      const generatedCode = 'INV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+          if (existingProfile) {
+            userId = existingProfile.id;
+          } else {
+            throw new Error(
+              "This user email already exists in Auth. Please enter a new email address.",
+            );
+          }
+        } else {
+          throw authErr;
+        }
+      } else {
+        userId = authData.user?.id;
+      }
+
+      const generatedCode =
+        "INV-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
       // 2. Insert or update profile row in Supabase
       if (userId) {
-        const { error: profileErr } = await adminSupabase.from('profiles').upsert({
-          id: userId,
-          display_name: newAgent.fullName,
-          email: newAgent.email,
-          phone: newAgent.phone,
-          company_name: newAgent.company,
-          role: 'agent',
-          status: newAgent.status,
-          commission_rate: Number(newAgent.commission),
-          invitation_code: generatedCode,
-          updated_at: new Date().toISOString(),
-        });
+        const { error: profileErr } = await adminSupabase
+          .from("profiles")
+          .upsert({
+            id: userId,
+            display_name: newAgent.fullName,
+            email: newAgent.email,
+            phone: newAgent.phone,
+            company_name: newAgent.company,
+            role: "agent",
+            status: newAgent.status,
+            commission_rate: Number(newAgent.commission),
+            invitation_code: generatedCode,
+          });
 
         if (profileErr) throw profileErr;
       }
 
       setShowNewAgentModal(false);
       setNewAgent({
-        fullName: '',
-        company: '',
-        email: '',
-        phone: '',
-        password: '',
+        fullName: "",
+        company: "",
+        email: "",
+        phone: "",
+        password: "",
         commission: 5,
-        status: 'Active',
+        status: "Active",
       });
       await loadAgents();
     } catch (err) {
-      console.error('Failed to create agent:', err);
-      setError(err.message || 'Failed to create agent.');
+      console.error("Failed to create agent:", err);
+      setError(err.message || "Failed to create agent.");
     } finally {
       setSubmitting(false);
     }
@@ -136,27 +168,40 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
     );
   });
 
-  const activeCount = agents.filter((a) => a.status === 'Active').length;
-  const suspendedCount = agents.filter((a) => a.status === 'Suspended').length;
+  const activeCount = agents.filter((a) => a.status === "Active").length;
+  const suspendedCount = agents.filter((a) => a.status === "Suspended").length;
 
   return (
     <div className="all-agents-page">
+      {/* HEADER */}
       <div className="all-agents-header">
         <div>
           <h2>All Agents</h2>
-          <p>Create agents, manage invitation codes, and track their seller networks.</p>
+          <p>
+            Create agents, manage invitation codes, and track their seller
+            networks.
+          </p>
         </div>
 
         <div className="all-agents-header-actions">
-          <button className="agents-refresh-btn" onClick={loadAgents} type="button">
+          <button
+            className="agents-refresh-btn"
+            onClick={loadAgents}
+            type="button"
+          >
             ↻
           </button>
-          <button className="new-agent-btn" onClick={() => setShowNewAgentModal(true)} type="button">
+          <button
+            className="new-agent-btn"
+            onClick={() => setShowNewAgentModal(true)}
+            type="button"
+          >
             <span>♙</span> New Agent
           </button>
         </div>
       </div>
 
+      {/* STATS */}
       <div className="agent-stat-grid">
         <div className="agent-stat-card">
           <div className="agent-stat-icon">♙</div>
@@ -182,6 +227,7 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
         </div>
       </div>
 
+      {/* SEARCH */}
       <div className="agents-search-box">
         <span className="agents-search-icon">⌕</span>
         <input
@@ -192,6 +238,7 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
         />
       </div>
 
+      {/* TABLE */}
       <div className="agents-table-wrapper">
         <table className="agents-table">
           <thead>
@@ -211,7 +258,10 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="10" style={{ textAlign: 'center', padding: '2rem' }}>
+                <td
+                  colSpan="10"
+                  style={{ textAlign: "center", padding: "2rem" }}
+                >
                   Loading agents from database...
                 </td>
               </tr>
@@ -233,13 +283,18 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                   <td>{agent.company}</td>
                   <td className="invitation-code">{agent.invitationCode}</td>
                   <td>
-                    <span className={`agent-status ${agent.status.toLowerCase()}`}>
+                    <span
+                      className={`agent-status ${agent.status.toLowerCase()}`}
+                    >
                       {agent.status}
                     </span>
                   </td>
                   <td>
                     <span className="seller-count">{agent.sellers}</span>
-                    <span className="seller-approved"> {agent.sellersDetail}</span>
+                    <span className="seller-approved">
+                      {" "}
+                      {agent.sellersDetail}
+                    </span>
                   </td>
                   <td className="pending-count">{agent.pending}</td>
                   <td>{agent.commission}</td>
@@ -253,14 +308,19 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                       <button
                         className="agent-action merchants"
                         type="button"
-                        onClick={() => onNavigateToMerchants && onNavigateToMerchants(agent.dbId)}
+                        onClick={() =>
+                          onNavigateToMerchants &&
+                          onNavigateToMerchants(agent.dbId)
+                        }
                       >
                         ♧ View Merchants
                       </button>
                       <button
                         className="agent-action message"
                         type="button"
-                        onClick={() => onNavigateToChat && onNavigateToChat(agent.dbId)}
+                        onClick={() =>
+                          onNavigateToChat && onNavigateToChat(agent.dbId)
+                        }
                       >
                         ◯ Message
                         {agent.unread > 0 && (
@@ -274,7 +334,10 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
             )}
             {!loading && filteredAgents.length === 0 && (
               <tr>
-                <td colSpan="10" style={{ textAlign: 'center', padding: '2rem' }}>
+                <td
+                  colSpan="10"
+                  style={{ textAlign: "center", padding: "2rem" }}
+                >
                   No agents found in database.
                 </td>
               </tr>
@@ -283,6 +346,7 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
         </table>
       </div>
 
+      {/* CREATE AGENT MODAL */}
       {showNewAgentModal && (
         <div className="new-agent-modal">
           <div className="new-agent-modal-header">
@@ -297,7 +361,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
           </div>
 
           <form onSubmit={handleCreateAgent}>
-            {error && <p style={{ color: 'red', margin: '0 0 1rem 0' }}>{error}</p>}
+            {error && (
+              <p style={{ color: "red", margin: "0 0 1rem 0" }}>{error}</p>
+            )}
 
             <div className="new-agent-form-group">
               <label>Full Name *</label>
@@ -305,7 +371,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 type="text"
                 placeholder="e.g. John Smith"
                 value={newAgent.fullName}
-                onChange={(e) => setNewAgent({ ...newAgent, fullName: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, fullName: e.target.value })
+                }
                 required
               />
             </div>
@@ -316,7 +384,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 type="text"
                 placeholder="e.g. Smith Trading Ltd"
                 value={newAgent.company}
-                onChange={(e) => setNewAgent({ ...newAgent, company: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, company: e.target.value })
+                }
               />
             </div>
 
@@ -326,7 +396,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 type="email"
                 placeholder="agent@example.com"
                 value={newAgent.email}
-                onChange={(e) => setNewAgent({ ...newAgent, email: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, email: e.target.value })
+                }
                 required
               />
             </div>
@@ -337,7 +409,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 type="text"
                 placeholder="+92 300 1234567"
                 value={newAgent.phone}
-                onChange={(e) => setNewAgent({ ...newAgent, phone: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, phone: e.target.value })
+                }
                 required
               />
             </div>
@@ -349,7 +423,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 placeholder="Enter password"
                 minLength="6"
                 value={newAgent.password}
-                onChange={(e) => setNewAgent({ ...newAgent, password: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, password: e.target.value })
+                }
                 required
               />
             </div>
@@ -361,7 +437,9 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 min="0"
                 max="100"
                 value={newAgent.commission}
-                onChange={(e) => setNewAgent({ ...newAgent, commission: e.target.value })}
+                onChange={(e) =>
+                  setNewAgent({ ...newAgent, commission: e.target.value })
+                }
               />
             </div>
 
@@ -371,18 +449,20 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 <button
                   type="button"
                   className={`agent-status-option ${
-                    newAgent.status === 'Active' ? 'selected-active' : ''
+                    newAgent.status === "Active" ? "selected-active" : ""
                   }`}
-                  onClick={() => setNewAgent({ ...newAgent, status: 'Active' })}
+                  onClick={() => setNewAgent({ ...newAgent, status: "Active" })}
                 >
                   Active
                 </button>
                 <button
                   type="button"
                   className={`agent-status-option ${
-                    newAgent.status === 'Suspended' ? 'selected-suspended' : ''
+                    newAgent.status === "Suspended" ? "selected-suspended" : ""
                   }`}
-                  onClick={() => setNewAgent({ ...newAgent, status: 'Suspended' })}
+                  onClick={() =>
+                    setNewAgent({ ...newAgent, status: "Suspended" })
+                  }
                 >
                   Suspended
                 </button>
@@ -402,7 +482,7 @@ export default function AllAgents({ openCreateAgent = false, onNavigateToChat, o
                 className="new-agent-create-btn"
                 disabled={submitting}
               >
-                {submitting ? 'Creating...' : 'Create Agent'}
+                {submitting ? "Creating..." : "Create Agent"}
               </button>
             </div>
           </form>
