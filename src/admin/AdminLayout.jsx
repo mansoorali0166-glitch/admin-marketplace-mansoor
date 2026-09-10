@@ -5,6 +5,7 @@ import Merchants from './Merchants';
 import AllAgents from './AllAgents';
 import ActiveAgents from './ActiveAgents';
 import SuspendedAgents from './SuspendedAgents';
+import DeletedAgents from './DeletedAgents';
 import AgentInvitationCodes from './AgentInvitationCodes';
 import AllOrders from './AllOrders';
 import Disputes from './Disputes';
@@ -52,6 +53,7 @@ export default function AdminLayout({ onLogout }) {
     'All Agents',
     'Active Agents',
     'Suspended Agents',
+    'Deleted Agents',
     'Agent Invitation Codes',
   ].includes(activeTab);
 
@@ -209,6 +211,13 @@ export default function AdminLayout({ onLogout }) {
                   }
                 >
                   Agent Invitation Codes
+                </div>
+
+                <div
+                  className={`submenu-item ${activeTab === 'Deleted Agents' ? 'active-sub' : ''}`}
+                  onClick={() => handleTabClick('Deleted Agents')}
+                >
+                  Deleted Agents
                 </div>
 
               </div>
@@ -509,6 +518,8 @@ export default function AdminLayout({ onLogout }) {
           {activeTab === 'Active Agents' && <ActiveAgents />}
 
           {activeTab === 'Suspended Agents' && <SuspendedAgents />}
+
+          {activeTab === 'Deleted Agents' && <DeletedAgents />}
 
           {activeTab === 'Agent Invitation Codes' && (
             <AgentInvitationCodes />
