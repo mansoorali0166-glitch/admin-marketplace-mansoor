@@ -1,30 +1,30 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import './Withdrawals.css';
 import { adminSupabase } from '../shared/supabase';
-
-const initialRequests = [
-  { id: 1, seller: 'Khan321', email: 'agent100@gmail.com', amount: 155, method: 'Bank Card', account: '0981627272838383', date: 'Aug 4, 2026, 12:39 AM', status: 'Approved' },
-  { id: 2, seller: 'Khan321', email: 'agent100@gmail.com', amount: 500, method: 'Bank Card', account: '0981627272838383', date: 'Aug 3, 2026, 12:49 AM', status: 'Rejected' },
-  { id: 3, seller: 'Khan321', email: 'agent100@gmail.com', amount: 100, method: 'Bank Card', account: '0981627272838383', date: 'Jul 29, 2026, 01:26 AM', status: 'Approved' },
-  { id: 4, seller: 'Khan321', email: 'agent100@gmail.com', amount: 166, method: 'Bank Card', account: '0981627272838383', date: 'Jul 28, 2026, 12:35 AM', status: 'Approved' },
-  { id: 5, seller: 'newseller1', email: 'newseller1@test.com', amount: 5, method: 'bank', account: 'PK32 0000 1234 5678', date: 'Jul 16, 2026, 03:06 PM', status: 'Rejected' },
-  { id: 6, seller: 'newseller1', email: 'newseller1@test.com', amount: 5, method: 'bank', account: 'PK32 0000 1234 5678', date: 'Jul 16, 2026, 03:06 PM', status: 'Approved' },
-  { id: 7, seller: 'seller2026', email: 'seller2026@test.com', amount: 75, method: 'Bank Card', account: '5500 2388 1920', date: 'Jul 14, 2026, 11:18 AM', status: 'Pending' },
-];
 
 const filters = ['All', 'Pending', 'Approved', 'Rejected'];
 
 export default function Withdrawals() {
-  const [requests, setRequests] = useState(initialRequests);
+  const [requests, setRequests] = useState([]);
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedRequest, setSelectedRequest] = useState(null);
-  useEffect(() => {
-    adminSupabase.from('withdrawals').select('*,profiles(display_name,email)').order('created_at',{ascending:false}).then(({data}) => {
-      if(data?.length) setRequests(data.map((item)=>({id:item.id,seller:item.profiles?.display_name||'Seller',email:item.profiles?.email||'',amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
-    });
+  const loadRequests = useCallback(async () => {
+    const { data, error } = await adminSupabase.from('withdrawals').select('*,profiles(display_name,email)').order('created_at',{ascending:false});
+    if (!error) setRequests((data || []).map((item)=>({id:item.id,seller:item.profiles?.display_name||'Seller',email:item.profiles?.email||'',amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
   }, []);
 
-  const visibleRequests = useMemo(() => activeFilter === 'All' ? requests : requests.filter((request) => request.status === activeFilter), [activeFilter]);
+  useEffect(() => {
+    loadRequests();
+    const channel = adminSupabase.channel('admin-live-withdrawals').on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawals' }, loadRequests).subscribe();
+    const refreshOnFocus = () => loadRequests();
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      adminSupabase.removeChannel(channel);
+    };
+  }, [loadRequests]);
+
+  const visibleRequests = useMemo(() => activeFilter === 'All' ? requests : requests.filter((request) => request.status === activeFilter), [activeFilter, requests]);
 
   return (
     <section className="withdrawals-page">
