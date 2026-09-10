@@ -19,97 +19,173 @@ const tabs = [
 
 export default function ChatCenter() {
   const [activeTab, setActiveTab] = useState("Send Message");
-  const [sendMode, setSendMode] = useState("Individual");
-  const [recipient, setRecipient] = useState("");
+  const [sendMode, setSendMode] = useState("Individual"); // 'Individual' | 'Broadcast to All'
+  const [recipientRole, setRecipientRole] = useState("seller"); // 'seller' | 'agent'
+  const [recipientId, setRecipientId] = useState("");
+  const [broadcastTarget, setBroadcastTarget] = useState("seller"); // 'seller' | 'agent' | 'all'
   const [sender, setSender] = useState("Platform Support");
   const [message, setMessage] = useState("");
+
+  // Loaded profiles
+  const [allSellers, setAllSellers] = useState([]);
+  const [allAgents, setAllAgents] = useState([]);
+
+  // Conversations list
+  const [sellersList, setSellersList] = useState([]);
+  const [agentsList, setAgentsList] = useState([]);
+  const [published, setPublished] = useState([]);
+  const [loadingSellers, setLoadingSellers] = useState(true);
+  const [loadingAgents, setLoadingAgents] = useState(true);
+
+  // Thread overlay
   const [activeThread, setActiveThread] = useState(null);
+  const [threadMessages, setThreadMessages] = useState([]);
+  const [threadReply, setThreadReply] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // Announcement form
   const [announcementForm, setAnnouncementForm] = useState({
     title: "",
     content: "",
   });
-  const [published, setPublished] = useState([]);
-  const [sellers, setSellers] = useState([]);
-  const [agents, setAgents] = useState([]);
-  const [threadReply, setThreadReply] = useState("");
-  const [loadingSellers, setLoadingSellers] = useState(true);
-  const [loadingAgents, setLoadingAgents] = useState(true);
 
-  // Fetch sellers exclusively from Supabase
-  const loadSellerMessages = async () => {
-    setLoadingSellers(true);
+  // 1. Fetch current admin user ID & load profiles
+  const loadProfiles = async () => {
     try {
-      const { data } = await adminSupabase
-        .from("messages")
-        .select(
-          "*, sender:profiles!messages_sender_id_fkey(display_name, email)",
-        )
-        .eq("channel", "service")
-        .order("created_at", { ascending: false });
+      const { data: auth } = await adminSupabase.auth.getUser();
+      if (auth?.user) setCurrentUserId(auth.user.id);
 
-      if (data) {
-        setSellers(
-          data.map((item) => ({
-            id: item.id,
-            userId: item.sender_id,
-            name: item.sender?.display_name || item.sender?.email || "Seller",
-            message: item.body || "Image attachment",
-            meta: "Customer service",
-            unread: item.read_at ? 0 : 1,
-            date: new Date(item.created_at).toLocaleString(),
+      // Fetch sellers
+      const { data: sellersData } = await adminSupabase
+        .from("profiles")
+        .select("id, display_name, email, role")
+        .eq("role", "seller")
+        .order("display_name");
+
+      if (sellersData) {
+        setAllSellers(
+          sellersData.map((s) => ({
+            id: s.id,
+            name: s.display_name || s.email || "Seller",
+            email: s.email,
+          })),
+        );
+      }
+
+      // Fetch agents
+      const { data: agentsData } = await adminSupabase
+        .from("profiles")
+        .select("id, display_name, email, role")
+        .eq("role", "agent")
+        .order("display_name");
+
+      if (agentsData) {
+        setAllAgents(
+          agentsData.map((a) => ({
+            id: a.id,
+            name: a.display_name || a.email || "Agent",
+            email: a.email,
           })),
         );
       }
     } catch (err) {
-      console.error("Failed to load seller messages:", err);
+      console.error("Error loading profiles:", err);
+    }
+  };
+
+  // 2. Fetch seller conversation list from messages
+  const loadSellerConversations = async () => {
+    setLoadingSellers(true);
+    try {
+      const { data: messagesData, error: messagesError } = await adminSupabase
+        .from("messages")
+        .select("*")
+        .eq("channel", "service")
+        .order("created_at", { ascending: false });
+      if (messagesError) console.error("Error loading service messages:", messagesError);
+
+      const { data: sellerProfiles } = await adminSupabase
+        .from("profiles")
+        .select("id, display_name, email")
+        .eq("role", "seller");
+
+      if (sellerProfiles) {
+        const conversations = sellerProfiles.map((profile) => {
+          const userMsgs = (messagesData || []).filter(
+            (m) => m.sender_id === profile.id || m.recipient_id === profile.id,
+          );
+          const latest = userMsgs[0];
+          const unreadCount = userMsgs.filter(
+            (m) => m.sender_id === profile.id && !m.read_at,
+          ).length;
+
+          return {
+            id: profile.id,
+            userId: profile.id,
+            name: profile.display_name || profile.email || "Seller",
+            email: profile.email,
+            message: latest?.body || "No messages yet",
+            meta: "Customer Service Channel",
+            unread: unreadCount,
+            date: latest ? new Date(latest.created_at).toLocaleString() : "—",
+          };
+        });
+
+        setSellersList(conversations);
+      }
+    } catch (err) {
+      console.error("Error loading seller conversations:", err);
     } finally {
       setLoadingSellers(false);
     }
   };
 
-  // Fetch agents exclusively from Supabase
-  const loadAgents = async () => {
+  // 3. Fetch agent conversation list from messages
+  const loadAgentConversations = async () => {
     setLoadingAgents(true);
     try {
-      const { data: profiles } = await adminSupabase
-        .from("profiles")
-        .select("id, display_name, email")
-        .eq("role", "agent")
-        .order("display_name");
-
-      const { data: rows } = await adminSupabase
+      const { data: messagesData } = await adminSupabase
         .from("messages")
         .select("*")
         .eq("channel", "agent")
         .order("created_at", { ascending: false });
 
-      if (profiles) {
-        setAgents(
-          profiles.map((profile) => {
-            const latest = (rows || []).find(
-              (row) =>
-                row.sender_id === profile.id || row.recipient_id === profile.id,
-            );
-            return {
-              id: profile.id,
-              userId: profile.id,
-              name: profile.display_name || profile.email,
-              email: profile.email,
-              unread: latest && !latest.read_at ? 1 : 0,
-              date: latest ? new Date(latest.created_at).toLocaleString() : "—",
-              message: latest?.body || "",
-            };
-          }),
-        );
+      const { data: agentProfiles } = await adminSupabase
+        .from("profiles")
+        .select("id, display_name, email")
+        .eq("role", "agent");
+
+      if (agentProfiles) {
+        const conversations = agentProfiles.map((profile) => {
+          const userMsgs = (messagesData || []).filter(
+            (m) => m.sender_id === profile.id || m.recipient_id === profile.id,
+          );
+          const latest = userMsgs[0];
+          const unreadCount = userMsgs.filter(
+            (m) => m.sender_id === profile.id && !m.read_at,
+          ).length;
+
+          return {
+            id: profile.id,
+            userId: profile.id,
+            name: profile.display_name || profile.email || "Agent",
+            email: profile.email,
+            message: latest?.body || "No messages yet",
+            unread: unreadCount,
+            date: latest ? new Date(latest.created_at).toLocaleString() : "—",
+          };
+        });
+
+        setAgentsList(conversations);
       }
     } catch (err) {
-      console.error("Failed to load agents:", err);
+      console.error("Error loading agent conversations:", err);
     } finally {
       setLoadingAgents(false);
     }
   };
 
-  // Fetch announcements exclusively from Supabase
+  // 4. Fetch announcements
   const loadAnnouncements = async () => {
     try {
       const { data } = await adminSupabase
@@ -128,23 +204,53 @@ export default function ChatCenter() {
         );
       }
     } catch (err) {
-      console.error("Failed to load announcements:", err);
+      console.error("Error loading announcements:", err);
+    }
+  };
+
+  // Load message history for active thread modal
+  const loadThreadHistory = async (targetUserId, channelType) => {
+    try {
+      const { data: auth } = await adminSupabase.auth.getUser();
+      const adminId = auth?.user?.id;
+      if (!adminId || !targetUserId) return;
+
+      const channel = channelType === "agent" ? "agent" : "service";
+
+      const { data } = await adminSupabase
+        .from("messages")
+        .select("*")
+        .eq("channel", channel)
+        .or(
+          `and(sender_id.eq.${adminId},recipient_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},recipient_id.eq.${adminId})`,
+        )
+        .order("created_at", { ascending: true });
+
+      if (data) {
+        setThreadMessages(data);
+      }
+    } catch (err) {
+      console.error("Error loading thread history:", err);
     }
   };
 
   useEffect(() => {
-    loadSellerMessages();
-    loadAgents();
+    loadProfiles();
+    loadSellerConversations();
+    loadAgentConversations();
     loadAnnouncements();
 
     const channel = adminSupabase
-      .channel("admin-message-center")
+      .channel("chat-center-live")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
         () => {
-          loadSellerMessages();
-          loadAgents();
+          loadSellerConversations();
+          loadAgentConversations();
+          if (activeThread) {
+            loadThreadHistory(activeThread.userId, activeThread.type);
+          }
         },
       )
       .on(
@@ -157,66 +263,103 @@ export default function ChatCenter() {
     return () => {
       adminSupabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeThread]);
 
+  // Handle open thread
+  const openThreadModal = (userObj, type) => {
+    const threadData = {
+      type,
+      userId: userObj.userId || userObj.id,
+      name: userObj.name,
+      email: userObj.email,
+    };
+    setActiveThread(threadData);
+    loadThreadHistory(threadData.userId, type);
+  };
+
+  // Send message from 'Send Message' tab
   const sendMessage = async (event) => {
     event.preventDefault();
     try {
       const { data: auth } = await adminSupabase.auth.getUser();
       if (!auth?.user) return;
 
-      let query = adminSupabase
-        .from("profiles")
-        .select("id, role")
-        .in("role", ["seller", "agent"]);
       if (sendMode === "Individual") {
-        query = query.or(
-          `email.ilike.%${recipient}%,display_name.ilike.%${recipient}%`,
-        );
-      }
+        if (!recipientId) return;
 
-      const { data: recipients } = await query;
+        const channel = recipientRole === "agent" ? "agent" : "service";
 
-      if (recipients?.length) {
-        await adminSupabase.from("messages").insert(
-          recipients.map((item) => ({
-            sender_id: auth.user.id,
-            recipient_id: item.id,
-            channel: item.role === "agent" ? "agent" : "service",
-            body: message,
-          })),
-        );
+        await adminSupabase.from("messages").insert({
+          sender_id: auth.user.id,
+          recipient_id: recipientId,
+          channel,
+          body: message.trim(),
+        });
+      } else {
+        // Broadcast Mode
+        let recipients = [];
+        if (broadcastTarget === "seller") {
+          recipients = allSellers.map((s) => ({
+            id: s.id,
+            channel: "service",
+          }));
+        } else if (broadcastTarget === "agent") {
+          recipients = allAgents.map((a) => ({ id: a.id, channel: "agent" }));
+        } else {
+          recipients = [
+            ...allSellers.map((s) => ({ id: s.id, channel: "service" })),
+            ...allAgents.map((a) => ({ id: a.id, channel: "agent" })),
+          ];
+        }
+
+        if (recipients.length > 0) {
+          await adminSupabase.from("messages").insert(
+            recipients.map((r) => ({
+              sender_id: auth.user.id,
+              recipient_id: r.id,
+              channel: r.channel,
+              body: message.trim(),
+            })),
+          );
+        }
       }
 
       setMessage("");
-      if (sendMode === "Individual") setRecipient("");
-      await Promise.all([loadSellerMessages(), loadAgents()]);
+      setRecipientId("");
+      await Promise.all([loadSellerConversations(), loadAgentConversations()]);
+      alert("Message sent successfully!");
     } catch (err) {
       console.error("Error sending message:", err);
     }
   };
 
-  const sendThreadReply = async () => {
+  // Send reply from Thread modal
+  const sendThreadReply = async (e) => {
+    e.preventDefault();
     if (!threadReply.trim() || !activeThread) return;
+
     try {
       const { data: auth } = await adminSupabase.auth.getUser();
       if (!auth?.user) return;
 
+      const channel = activeThread.type === "agent" ? "agent" : "service";
+
       await adminSupabase.from("messages").insert({
         sender_id: auth.user.id,
         recipient_id: activeThread.userId,
-        channel: activeThread.type === "agent" ? "agent" : "service",
+        channel,
         body: threadReply.trim(),
       });
 
       setThreadReply("");
-      setActiveThread(null);
-      await Promise.all([loadSellerMessages(), loadAgents()]);
+      await loadThreadHistory(activeThread.userId, activeThread.type);
+      await Promise.all([loadSellerConversations(), loadAgentConversations()]);
     } catch (err) {
       console.error("Error sending thread reply:", err);
     }
   };
 
+  // Publish announcement
   const publishAnnouncement = async (event) => {
     event.preventDefault();
     try {
@@ -237,16 +380,22 @@ export default function ChatCenter() {
     }
   };
 
-  const sellerUnreadCount = sellers.filter((s) => s.unread > 0).length;
-  const agentUnreadCount = agents.filter((a) => a.unread > 0).length;
+  const sellerUnreadCount = sellersList.reduce((sum, s) => sum + s.unread, 0);
+  const agentUnreadCount = agentsList.reduce((sum, a) => sum + a.unread, 0);
+
+  const activeRecipientOptions =
+    recipientRole === "seller" ? allSellers : allAgents;
 
   return (
     <section className="chat-center-page">
       <header className="chat-center-heading">
         <h2>Message Center</h2>
-        <p>Send messages, view conversations, and chat with agents.</p>
+        <p>
+          Send messages, view conversations, and chat with agents and sellers.
+        </p>
       </header>
 
+      {/* TABS */}
       <nav className="message-tabs">
         {tabs.map((tab) => (
           <button
@@ -273,6 +422,7 @@ export default function ChatCenter() {
         ))}
       </nav>
 
+      {/* TAB 1: SEND MESSAGE */}
       {activeTab === "Send Message" && (
         <div className="send-message-view">
           <div className="send-mode-tabs">
@@ -293,15 +443,64 @@ export default function ChatCenter() {
           </div>
 
           <form className="send-message-card" onSubmit={sendMessage}>
-            {sendMode === "Individual" && (
+            {sendMode === "Individual" ? (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 2fr",
+                    gap: "1rem",
+                  }}
+                >
+                  <label>
+                    Recipient Type
+                    <select
+                      value={recipientRole}
+                      onChange={(e) => {
+                        setRecipientRole(e.target.value);
+                        setRecipientId("");
+                      }}
+                    >
+                      <option value="seller">Seller / Merchant</option>
+                      <option value="agent">Agent</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Select Recipient *
+                    <select
+                      required
+                      value={recipientId}
+                      onChange={(e) => setRecipientId(e.target.value)}
+                    >
+                      <option value="">
+                        -- Choose{" "}
+                        {recipientRole === "seller" ? "Seller" : "Agent"} --
+                      </option>
+                      {activeRecipientOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.email})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </>
+            ) : (
               <label>
-                Recipient
-                <input
-                  required
-                  placeholder="Search sellers or agents..."
-                  value={recipient}
-                  onChange={(event) => setRecipient(event.target.value)}
-                />
+                Broadcast Target Audience
+                <select
+                  value={broadcastTarget}
+                  onChange={(e) => setBroadcastTarget(e.target.value)}
+                >
+                  <option value="seller">
+                    All Sellers ({allSellers.length})
+                  </option>
+                  <option value="agent">All Agents ({allAgents.length})</option>
+                  <option value="all">
+                    Everyone ({allSellers.length + allAgents.length})
+                  </option>
+                </select>
               </label>
             )}
 
@@ -330,7 +529,7 @@ export default function ChatCenter() {
             </div>
 
             <label>
-              Message
+              Message Body *
               <textarea
                 required
                 maxLength="1000"
@@ -345,8 +544,7 @@ export default function ChatCenter() {
               className="send-message-submit"
               type="submit"
               disabled={
-                !message.trim() ||
-                (sendMode === "Individual" && !recipient.trim())
+                !message.trim() || (sendMode === "Individual" && !recipientId)
               }
             >
               ➤ Send Message
@@ -355,16 +553,18 @@ export default function ChatCenter() {
         </div>
       )}
 
+      {/* TAB 2: SELLER CONVERSATIONS */}
       {activeTab === "Seller Conversations" && (
         <div className="conversations-view">
           <div className="message-section-header">
             <div>
               <h3>All Seller Conversations</h3>
               <p>
-                All messages sent to sellers. Click “Reply” to open the thread.
+                All conversations with merchants. Click “Reply” to view full
+                history and respond.
               </p>
             </div>
-            <button type="button" onClick={loadSellerMessages}>
+            <button type="button" onClick={loadSellerConversations}>
               ↻ Refresh
             </button>
           </div>
@@ -374,19 +574,19 @@ export default function ChatCenter() {
               <p style={{ padding: "1rem", color: "#64748b" }}>
                 Loading seller messages...
               </p>
-            ) : sellers.length === 0 ? (
+            ) : sellersList.length === 0 ? (
               <p style={{ padding: "1rem", color: "#64748b" }}>
-                No seller messages found in database.
+                No seller profiles or messages found.
               </p>
             ) : (
-              sellers.map((seller) => (
+              sellersList.map((seller) => (
                 <article key={seller.id}>
                   <div className="chat-avatar">♙</div>
                   <div className="conversation-copy">
                     <strong>{seller.name}</strong>
                     <span>{seller.message}</span>
                     <small>
-                      {seller.meta}{" "}
+                      {seller.email}{" "}
                       {seller.unread > 0 && <b>{seller.unread} new</b>}
                     </small>
                   </div>
@@ -394,9 +594,7 @@ export default function ChatCenter() {
                   <button
                     type="button"
                     className="reply-btn"
-                    onClick={() =>
-                      setActiveThread({ type: "seller", ...seller })
-                    }
+                    onClick={() => openThreadModal(seller, "seller")}
                   >
                     ↶ Reply
                   </button>
@@ -407,14 +605,18 @@ export default function ChatCenter() {
         </div>
       )}
 
+      {/* TAB 3: AGENT CHATS */}
       {activeTab === "Agent Chats" && (
         <div className="agent-chats-view">
           <div className="message-section-header">
             <div>
               <h3>Agent Chat Channels</h3>
-              <p>Private conversations between Super Admin and each agent.</p>
+              <p>
+                Private message channels between Super Admin and each registered
+                agent.
+              </p>
             </div>
-            <button type="button" onClick={loadAgents}>
+            <button type="button" onClick={loadAgentConversations}>
               ↻ Refresh
             </button>
           </div>
@@ -424,12 +626,12 @@ export default function ChatCenter() {
               <p style={{ padding: "1rem", color: "#64748b" }}>
                 Loading agent chats...
               </p>
-            ) : agents.length === 0 ? (
+            ) : agentsList.length === 0 ? (
               <p style={{ padding: "1rem", color: "#64748b" }}>
-                No active agent accounts found in database.
+                No active agent accounts found.
               </p>
             ) : (
-              agents.map((agent) => (
+              agentsList.map((agent) => (
                 <article key={agent.id}>
                   <div className="agent-chat-avatar">
                     {agent.name ? agent.name.charAt(0).toUpperCase() : "A"}
@@ -437,7 +639,7 @@ export default function ChatCenter() {
                   <div>
                     <strong>{agent.name}</strong>
                     <span>{agent.email}</span>
-                    <small>{String(agent.id).slice(0, 8).toUpperCase()}</small>
+                    <small>{agent.message}</small>
                   </div>
                   <time>{agent.date}</time>
                   {agent.unread > 0 && (
@@ -445,13 +647,7 @@ export default function ChatCenter() {
                   )}
                   <button
                     type="button"
-                    onClick={() =>
-                      setActiveThread({
-                        type: "agent",
-                        userId: agent.userId || agent.id,
-                        ...agent,
-                      })
-                    }
+                    onClick={() => openThreadModal(agent, "agent")}
                   >
                     ◯ Open Chat
                   </button>
@@ -459,14 +655,10 @@ export default function ChatCenter() {
               ))
             )}
           </div>
-
-          <p className="agent-chat-note">
-            Each agent has a dedicated private chat channel. Agents can also
-            message you from their portal.
-          </p>
         </div>
       )}
 
+      {/* TAB 4: ANNOUNCEMENTS */}
       {activeTab === "Announcements" && (
         <div className="chat-announcements-view">
           <form className="publish-card" onSubmit={publishAnnouncement}>
@@ -543,6 +735,7 @@ export default function ChatCenter() {
         </div>
       )}
 
+      {/* THREAD OVERLAY MODAL */}
       {activeThread && (
         <div
           className="chat-thread-overlay"
@@ -550,28 +743,149 @@ export default function ChatCenter() {
             event.target === event.currentTarget && setActiveThread(null)
           }
         >
-          <div className="chat-thread-modal">
-            <div>
-              <h3>
-                {activeThread.type === "agent" ? "Chat with" : "Reply to"}{" "}
-                {activeThread.name}
-              </h3>
-              <button type="button" onClick={() => setActiveThread(null)}>
+          <div
+            className="chat-thread-modal"
+            style={{ maxWidth: "600px", width: "90%" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid #e2e8f0",
+                paddingBottom: "0.75rem",
+                marginBottom: "1rem",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0 }}>Chat with {activeThread.name}</h3>
+                <small style={{ color: "#64748b" }}>{activeThread.email}</small>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveThread(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                }}
+              >
                 ×
               </button>
             </div>
-            <p>
-              {activeThread.message ||
-                `Private agent channel for ${activeThread.email}`}
-            </p>
-            <textarea
-              placeholder="Write a reply..."
-              value={threadReply}
-              onChange={(event) => setThreadReply(event.target.value)}
-            />
-            <button type="button" onClick={sendThreadReply}>
-              Send Reply
-            </button>
+
+            {/* MESSAGE STREAM */}
+            <div
+              style={{
+                maxHeight: "320px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+                padding: "0.5rem",
+                marginBottom: "1rem",
+                background: "#f8fafc",
+                borderRadius: "8px",
+              }}
+            >
+              {threadMessages.length === 0 ? (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "#94a3b8",
+                    padding: "1rem",
+                  }}
+                >
+                  No previous messages. Start the conversation below!
+                </p>
+              ) : (
+                threadMessages.map((msg) => {
+                  const isMine = msg.sender_id === currentUserId;
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        alignSelf: isMine ? "flex-end" : "flex-start",
+                        background: isMine ? "#2563eb" : "#ffffff",
+                        color: isMine ? "#ffffff" : "#0f172a",
+                        padding: "0.6rem 0.9rem",
+                        borderRadius: "12px",
+                        maxWidth: "80%",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        border: isMine ? "none" : "1px solid #e2e8f0",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.92rem",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {msg.body}
+                      </p>
+                      <small
+                        style={{
+                          fontSize: "0.7rem",
+                          opacity: 0.75,
+                          display: "block",
+                          textAlign: "right",
+                          marginTop: "4px",
+                        }}
+                      >
+                        {new Date(msg.created_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </small>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* REPLY INPUT */}
+            <form
+              onSubmit={sendThreadReply}
+              style={{ display: "flex", gap: "0.5rem" }}
+            >
+              <textarea
+                required
+                placeholder="Write a message..."
+                value={threadReply}
+                onChange={(event) => setThreadReply(event.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "0.6rem",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  resize: "vertical",
+                  minHeight: "42px",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendThreadReply(e);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={!threadReply.trim()}
+                style={{
+                  padding: "0.6rem 1.2rem",
+                  background: "#2563eb",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Send
+              </button>
+            </form>
           </div>
         </div>
       )}

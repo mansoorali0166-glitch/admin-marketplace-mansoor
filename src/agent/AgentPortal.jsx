@@ -378,23 +378,16 @@ function AgentMessages() {
     const load = async () => {
       const { data: auth } = await agentSupabase.auth.getUser();
       if (!auth?.user) return;
-      const { data } = await agentSupabase
+      const { data, error } = await agentSupabase
         .from("messages")
         .select("*")
         .eq("channel", "agent")
+        .or(`sender_id.eq.${auth.user.id},recipient_id.eq.${auth.user.id}`)
         .order("created_at");
-      const { data: admins } = await agentSupabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin");
-      const adminIds = new Set((admins || []).map((item) => item.id));
-      const adminMessages = (data || []).filter(
-        (item) =>
-          adminIds.has(item.sender_id) || adminIds.has(item.recipient_id),
-      );
-      if (mounted && adminMessages.length)
+      if (error) console.log("AGENT-ADMIN MESSAGES LOAD ERROR:", error);
+      if (mounted)
         setMessages(
-          adminMessages.map((item) => ({
+          (data || []).map((item) => ({
             id: item.id,
             mine: item.sender_id === auth.user.id,
             text: item.body,
@@ -2283,7 +2276,9 @@ function AgentBuyerMessages() {
   const buyerContextForMessage = (message) => {
     const explicit = readBuyerMarker(message.image_url);
     if (explicit || message.sender_id === agentUserId) return explicit;
-    const messageIndex = liveMessages.findIndex((item) => item.id === message.id);
+    const messageIndex = liveMessages.findIndex(
+      (item) => item.id === message.id,
+    );
     for (let index = messageIndex - 1; index >= 0; index -= 1) {
       const candidate = liveMessages[index];
       if (
@@ -2665,11 +2660,10 @@ function AgentBuyerMessages() {
               >
                 <option value="">— No product (general conversation) —</option>
                 {availableProducts
-                  .filter(
-                    (product) =>
-                      productFilter === "ordered"
-                        ? product.ordered
-                        : !product.ordered,
+                  .filter((product) =>
+                    productFilter === "ordered"
+                      ? product.ordered
+                      : !product.ordered,
                   )
                   .map((product) => (
                     <option key={product.id} value={product.id}>
@@ -2697,10 +2691,7 @@ function AgentBuyerMessages() {
               <button
                 type="submit"
                 disabled={
-                  sending ||
-                  !form.buyer ||
-                  !form.seller ||
-                  !form.message.trim()
+                  sending || !form.buyer || !form.seller || !form.message.trim()
                 }
               >
                 {sending ? "Sending…" : "Send Message"}
@@ -2721,7 +2712,8 @@ function AgentBuyerMessages() {
               <div>
                 <h3>{activeThread.buyer}</h3>
                 <p>
-                  {activeThread.seller} · {activeThread.product || "General conversation"}
+                  {activeThread.seller} ·{" "}
+                  {activeThread.product || "General conversation"}
                 </p>
               </div>
               <button type="button" onClick={() => setOpenThread(null)}>
@@ -5158,30 +5150,36 @@ function AgentMerchantList() {
           return map.set(id, (map.get(id) || 0) + parseMoney(row.amount));
         }, new Map());
       setMerchants(
-        (profileRes.data || []).filter((profile) => !profile.registration_status || profile.registration_status === "Approved").map((profile) => {
-          const id = String(profile.id);
-          const total = balances.has(id) ? balances.get(id) : 0;
-          return {
-            userId: profile.id,
-            id: profile.id.slice(0, 8).toUpperCase(),
-            avatar: profile.avatar_url || "",
-            initial: (profile.display_name ||
-              profile.email ||
-              "S")[0].toUpperCase(),
-            name: profile.display_name || profile.email.split("@")[0],
-            email: profile.email,
-            balance: formatUsd(total),
-            frozen: `${formatUsd(frozen.get(id) || 0)} frozen`,
-            credit: profile.credit_score ?? 100,
-            status: profile.allow_login === false ? "Suspended" : "Active",
-            shopLocked: profile.shop_locked === true,
-            joined: new Date(profile.created_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }),
-          };
-        }),
+        (profileRes.data || [])
+          .filter(
+            (profile) =>
+              !profile.registration_status ||
+              profile.registration_status === "Approved",
+          )
+          .map((profile) => {
+            const id = String(profile.id);
+            const total = balances.has(id) ? balances.get(id) : 0;
+            return {
+              userId: profile.id,
+              id: profile.id.slice(0, 8).toUpperCase(),
+              avatar: profile.avatar_url || "",
+              initial: (profile.display_name ||
+                profile.email ||
+                "S")[0].toUpperCase(),
+              name: profile.display_name || profile.email.split("@")[0],
+              email: profile.email,
+              balance: formatUsd(total),
+              frozen: `${formatUsd(frozen.get(id) || 0)} frozen`,
+              credit: profile.credit_score ?? 100,
+              status: profile.allow_login === false ? "Suspended" : "Active",
+              shopLocked: profile.shop_locked === true,
+              joined: new Date(profile.created_at).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }),
+            };
+          }),
       );
     }
     setLoading(false);
@@ -5407,14 +5405,32 @@ function AgentApplications() {
     setMessage("");
     const { data: auth } = await agentSupabase.auth.getUser();
     if (auth.user) {
-      const { error: syncError } = await agentSupabase.rpc("sync_agent_merchant_applications");
-      const [{ data: rows, error: applicationsError }, { data: profile, error: profileError }] = await Promise.all([
-        agentSupabase.from("merchant_applications").select("*").eq("agent_id", auth.user.id).order("created_at", { ascending: false }),
-        agentSupabase.from("profiles").select("invitation_code").eq("id", auth.user.id).maybeSingle(),
+      const { error: syncError } = await agentSupabase.rpc(
+        "sync_agent_merchant_applications",
+      );
+      const [
+        { data: rows, error: applicationsError },
+        { data: profile, error: profileError },
+      ] = await Promise.all([
+        agentSupabase
+          .from("merchant_applications")
+          .select("*")
+          .eq("agent_id", auth.user.id)
+          .order("created_at", { ascending: false }),
+        agentSupabase
+          .from("profiles")
+          .select("invitation_code")
+          .eq("id", auth.user.id)
+          .maybeSingle(),
       ]);
       setApplications(rows || []);
       if (profile?.invitation_code) setInviteCode(profile.invitation_code);
-      if (syncError || applicationsError || profileError) setMessage(syncError?.message || applicationsError?.message || profileError.message);
+      if (syncError || applicationsError || profileError)
+        setMessage(
+          syncError?.message ||
+            applicationsError?.message ||
+            profileError.message,
+        );
     } else {
       setApplications([]);
       setMessage("Your agent session has expired. Please sign in again.");
@@ -5423,15 +5439,33 @@ function AgentApplications() {
   };
   useEffect(() => {
     load();
-    const channel = agentSupabase.channel("agent-registration-applications").on("postgres_changes", { event: "*", schema: "public", table: "merchant_applications" }, load).subscribe();
+    const channel = agentSupabase
+      .channel("agent-registration-applications")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "merchant_applications" },
+        load,
+      )
+      .subscribe();
     return () => agentSupabase.removeChannel(channel);
   }, []);
   const decide = async (application, decision) => {
-    setBusyId(application.id); setMessage("");
-    const { error } = await agentSupabase.rpc("decide_merchant_application", { application_id_input: application.id, decision_input: decision });
+    setBusyId(application.id);
+    setMessage("");
+    const { error } = await agentSupabase.rpc("decide_merchant_application", {
+      application_id_input: application.id,
+      decision_input: decision,
+    });
     setBusyId("");
-    if (error) { setMessage(error.message); return; }
-    setMessage(decision === "Approved" ? "Merchant approved and added to Merchant List." : "Application denied.");
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage(
+      decision === "Approved"
+        ? "Merchant approved and added to Merchant List."
+        : "Application denied.",
+    );
     await load();
   };
   const visible = applications.filter((item) => item.status === tab);
@@ -5451,20 +5485,61 @@ function AgentApplications() {
           className={tab === "Pending" ? "active" : ""}
           onClick={() => setTab("Pending")}
         >
-          Pending ({applications.filter((item) => item.status === "Pending").length})
+          Pending (
+          {applications.filter((item) => item.status === "Pending").length})
         </button>
         <button
           type="button"
           className={tab === "Rejected" ? "active" : ""}
           onClick={() => setTab("Rejected")}
         >
-          Rejected ({applications.filter((item) => item.status === "Rejected").length})
+          Rejected (
+          {applications.filter((item) => item.status === "Rejected").length})
         </button>
       </nav>
       {message && <p className="agent-application-message">{message}</p>}
       <section className="agent-application-list">
-        {visible.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{item.email} · {item.phone || 'No phone'}</span><small>{item.address}</small><time>{new Date(item.created_at).toLocaleString()}</time></div><em className={item.status.toLowerCase()}>{item.status}</em>{item.status === "Pending" && <span><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Approved")}>✓ Approve</button><button type="button" disabled={busyId === item.id} onClick={() => decide(item, "Rejected")}>× Deny</button></span>}</article>)}
-        {!visible.length && <div className="agent-applications-empty"><div>▱</div><p>{loading ? "Loading applications…" : `No ${tab.toLowerCase()} applications.`}</p></div>}
+        {visible.map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>{item.name}</strong>
+              <span>
+                {item.email} · {item.phone || "No phone"}
+              </span>
+              <small>{item.address}</small>
+              <time>{new Date(item.created_at).toLocaleString()}</time>
+            </div>
+            <em className={item.status.toLowerCase()}>{item.status}</em>
+            {item.status === "Pending" && (
+              <span>
+                <button
+                  type="button"
+                  disabled={busyId === item.id}
+                  onClick={() => decide(item, "Approved")}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === item.id}
+                  onClick={() => decide(item, "Rejected")}
+                >
+                  × Deny
+                </button>
+              </span>
+            )}
+          </article>
+        ))}
+        {!visible.length && (
+          <div className="agent-applications-empty">
+            <div>▱</div>
+            <p>
+              {loading
+                ? "Loading applications…"
+                : `No ${tab.toLowerCase()} applications.`}
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

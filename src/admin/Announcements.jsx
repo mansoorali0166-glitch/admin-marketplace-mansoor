@@ -20,15 +20,26 @@ export default function Announcements() {
   const refresh = async () => {
     setRefreshing(true);
     const { data } = await adminSupabase.from('announcements').select('*').order('created_at', { ascending:false });
-    if (data?.length) setAnnouncements(data.map((item) => ({id:item.id,title:item.title,message:item.message,audience:item.target_type === 'all' ? 'All Agents' : 'Specific Agents',date:new Date(item.created_at).toLocaleString()})));
+    if (data?.length) setAnnouncements(data.map((item) => ({id:item.id,title:item.title,message:item.message,audience:'All Agents',date:new Date(item.created_at).toLocaleString()})));
     setRefreshing(false);
   };
 
+  const [sendError, setSendError] = useState('');
   const sendAnnouncement = async (event) => {
     event.preventDefault();
-    const { data: auth } = await adminSupabase.auth.getUser();
-    const { data } = await adminSupabase.from('announcements').insert({title:form.title,message:form.message,target_type:form.audience === 'All Agents' ? 'all' : 'specific',created_by:auth.user.id}).select().single();
-    setAnnouncements((current) => [{ id:data?.id || Date.now(), ...form, date: new Date(data?.created_at || Date.now()).toLocaleString() }, ...current]);
+    setSendError('');
+    const { data: auth, error: authError } = await adminSupabase.auth.getUser();
+    if (authError || !auth?.user) { setSendError('Your admin session has expired. Please sign in again.'); return; }
+    const { data, error } = await adminSupabase
+      .from('announcements')
+      .insert({
+        title: form.title,
+        message: form.message,
+      })
+      .select()
+      .single();
+    if (error) { setSendError(`Could not send announcement: ${error.message}`); return; }
+    setAnnouncements((current) => [{ id: data.id, title: form.title, message: form.message, audience: 'All Agents', date: new Date(data.created_at).toLocaleString() }, ...current]);
     setForm({ title: '', message: '', audience: 'All Agents' });
     setShowModal(false);
   };

@@ -82,7 +82,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
         client
           .from("messages")
           .select("*,product:products(id,name,product_code,sell_price,image_url)")
-          .in("channel", ["platform", "buyer", "agent"])
+          .in("channel", ["platform", "buyer", "agent", "service"])
           .or(`sender_id.eq.${sellerId},recipient_id.eq.${sellerId}`)
           .order("created_at", { ascending: true }),
         client
@@ -139,7 +139,12 @@ export default function SellerMessages({ client, sellerId, onBack }) {
 
       setBuyerMessages(rows.filter((item) => item.channel === "buyer"));
       setPlatformMessages(
-        rows.filter((item) => item.channel === "platform" || item.channel === "agent")
+        rows.filter(
+          (item) =>
+            item.channel === "platform" ||
+            item.channel === "agent" ||
+            item.channel === "service"
+        )
       );
       setLoading(false);
     };
