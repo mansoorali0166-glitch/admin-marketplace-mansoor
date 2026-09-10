@@ -250,7 +250,8 @@
    STATUS
    ========================================================= */
 
-.invitation-status-enabled {
+.invitation-status-enabled,
+.invitation-status-disabled {
   display: inline-flex;
 
   padding: 5px 10px;
@@ -265,6 +266,9 @@
 
   font-weight: 500;
 }
+
+.invitation-status-disabled { background: #fef2f2; color: #dc2626; }
+.invitation-copy-code { border: 0; background: transparent; color: #2563eb; font: inherit; font-weight: 700; letter-spacing: 1px; cursor: pointer; }
 
 
 /* =========================================================
@@ -308,6 +312,10 @@
 .invitation-disable-btn {
   color: #ef4444;
 }
+
+.invitation-enable-btn { color: #059669; }
+.invitation-actions button:disabled { cursor: wait; opacity: .55; }
+.invitation-error { padding: 10px 12px; border-radius: 8px; background: #fef2f2; color: #dc2626; font-size: 12px; }
 
 
 /* =========================================================

@@ -181,20 +181,33 @@ export default function AgentPortal({ onLogout }) {
   const [active, setActive] = useState("Dashboard");
   const [copied, setCopied] = useState("");
   const [agentAvatar, setAgentAvatar] = useState("");
-  const inviteCode = "P516326U";
-  const inviteLink = `${window.location.origin}/seller/register?code=${inviteCode}`;
+  const [inviteCode, setPortalInviteCode] = useState("");
+  const [inviteCodeEnabled, setInviteCodeEnabled] = useState(true);
+  const inviteLink = inviteCodeEnabled && inviteCode
+    ? `${window.location.origin}/seller/register?code=${inviteCode}`
+    : "Invitation code disabled";
 
   useEffect(() => {
     let mounted = true;
-    const loadAvatar = async () => {
+    const loadAgentProfile = async () => {
       const { data } = await agentSupabase.auth.getUser();
-      if (mounted) setAgentAvatar(data?.user?.user_metadata?.avatar_url || "");
+      if (!mounted) return;
+      setAgentAvatar(data?.user?.user_metadata?.avatar_url || "");
+      if (data?.user) {
+        const { data: profile } = await agentSupabase.from("profiles")
+          .select("invitation_code,invitation_code_enabled")
+          .eq("id", data.user.id).maybeSingle();
+        if (mounted) {
+          setPortalInviteCode(profile?.invitation_code || "");
+          setInviteCodeEnabled(profile?.invitation_code_enabled !== false);
+        }
+      }
     };
-    loadAvatar();
-    window.addEventListener("agent-avatar-changed", loadAvatar);
+    loadAgentProfile();
+    window.addEventListener("agent-avatar-changed", loadAgentProfile);
     return () => {
       mounted = false;
-      window.removeEventListener("agent-avatar-changed", loadAvatar);
+      window.removeEventListener("agent-avatar-changed", loadAgentProfile);
     };
   }, []);
 
@@ -215,10 +228,11 @@ export default function AgentPortal({ onLogout }) {
             AGENT ID <b>AGT000004</b>
           </span>
           <span>INVITATION CODE</span>
-          <strong>{inviteCode}</strong>
+          <strong>{inviteCodeEnabled ? (inviteCode || "Not assigned") : "Disabled"}</strong>
           <button
             type="button"
             aria-label="Copy invitation code"
+            disabled={!inviteCodeEnabled || !inviteCode}
             onClick={() => copy(inviteCode, "sidebar")}
           >
             ▢
@@ -262,8 +276,9 @@ export default function AgentPortal({ onLogout }) {
         </header>
         {active === "Dashboard" ? (
           <AgentDashboard
-            inviteCode={inviteCode}
+            inviteCode={inviteCodeEnabled ? inviteCode : ""}
             inviteLink={inviteLink}
+            inviteCodeEnabled={inviteCodeEnabled}
             copy={copy}
             copied={copied}
           />
@@ -5399,7 +5414,7 @@ function AgentApplications() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
-  const [inviteCode, setInviteCode] = useState("P516326U");
+  const [inviteCode, setInviteCode] = useState("");
   const load = async () => {
     setLoading(true);
     setMessage("");
@@ -5419,12 +5434,13 @@ function AgentApplications() {
           .order("created_at", { ascending: false }),
         agentSupabase
           .from("profiles")
-          .select("invitation_code")
+          .select("invitation_code,invitation_code_enabled")
           .eq("id", auth.user.id)
           .maybeSingle(),
       ]);
       setApplications(rows || []);
-      if (profile?.invitation_code) setInviteCode(profile.invitation_code);
+      if (profile?.invitation_code_enabled === false) setInviteCode("Disabled");
+      else if (profile?.invitation_code) setInviteCode(profile.invitation_code);
       if (syncError || applicationsError || profileError)
         setMessage(
           syncError?.message ||
@@ -5638,7 +5654,7 @@ function AgentTeam() {
   );
 }
 
-function AgentDashboard({ inviteCode, inviteLink, copy, copied }) {
+function AgentDashboard({ inviteCode, inviteLink, inviteCodeEnabled, copy, copied }) {
   return (
     <div className="agent-dashboard">
       <div className="agent-welcome">
@@ -5648,22 +5664,22 @@ function AgentDashboard({ inviteCode, inviteLink, copy, copied }) {
       <section className="agent-invite-grid">
         <article className="code-card">
           <small>MY INVITATION CODE</small>
-          <strong>{inviteCode}</strong>
-          <button type="button" onClick={() => copy(inviteCode, "code")}>
+          <strong>{inviteCodeEnabled ? (inviteCode || "Not assigned") : "Disabled"}</strong>
+          <button type="button" disabled={!inviteCodeEnabled || !inviteCode} onClick={() => copy(inviteCode, "code")}>
             ▢ {copied === "code" ? "Copied" : "Copy Code"}
           </button>
         </article>
         <article className="link-card">
           <small>SELLER INVITE LINK</small>
           <code>{inviteLink}</code>
-          <button type="button" onClick={() => copy(inviteLink, "link")}>
+          <button type="button" disabled={!inviteCodeEnabled} onClick={() => copy(inviteLink, "link")}>
             ▢ {copied === "link" ? "Copied" : "Copy Link"}
           </button>
         </article>
         <article className="qr-card">
           <small>INVITE QR CODE</small>
           <div className="fake-qr" aria-label="Invitation QR code preview" />
-          <button type="button" onClick={() => copy(inviteLink, "qr")}>
+          <button type="button" disabled={!inviteCodeEnabled} onClick={() => copy(inviteLink, "qr")}>
             ▢ {copied === "qr" ? "Copied" : "Copy QR Link"}
           </button>
           <p>Sellers can register with your code</p>
