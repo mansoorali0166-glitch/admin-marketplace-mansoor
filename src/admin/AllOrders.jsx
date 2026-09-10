@@ -56,7 +56,21 @@ export default function AllOrders() {
     }
     if (!quiet) setLoading(true);
     setMessage("");
-    const { data: rawOrders, error: ordersError } = await adminSupabase.from("orders").select("*").order("created_at", { ascending: false });
+    const directResult = await adminSupabase.from("orders").select("*").order("created_at", { ascending: false });
+    let rawOrders = directResult.data || [];
+    let ordersError = directResult.error;
+
+    // Some existing deployments have an older orders RLS policy that returns
+    // an empty set to admins. The protected RPC verifies the admin role and
+    // reads the complete table without exposing it to sellers or agents.
+    if (ordersError || rawOrders.length === 0) {
+      const rpcResult = await adminSupabase.rpc("admin_list_orders");
+      if (!rpcResult.error) {
+        rawOrders = rpcResult.data || [];
+        ordersError = null;
+      }
+    }
+
     if (ordersError) {
       setOrders([]);
       setMessage(`Could not load orders: ${ordersError.message}`);
@@ -95,7 +109,12 @@ export default function AllOrders() {
     setMessage("");
     setUpdatingId(order.dbId);
     setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status } : item));
-    const { error } = await adminSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId);
+    const directUpdate = await adminSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId).select("id").maybeSingle();
+    let error = directUpdate.error;
+    if (error || !directUpdate.data) {
+      const rpcResult = await adminSupabase.rpc("admin_update_order_status", { order_id: order.dbId, new_status: status });
+      error = rpcResult.error;
+    }
     if (error) {
       setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status: previousStatus } : item));
       setMessage(`Could not update order ${order.id}: ${error.message}`);
