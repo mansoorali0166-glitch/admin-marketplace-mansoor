@@ -8,4 +8,11 @@
     object-fit: cover;
   }
 
+.agent-topbar-profile{position:relative}
+.agent-topbar-profile-button{display:flex;align-items:center;gap:10px;padding:4px 7px;border:0;border-radius:20px;background:transparent;color:#475467;font:inherit;cursor:pointer}
+.agent-topbar-profile-button:hover{background:#f0fdfa}
+.agent-topbar-profile-button:focus-visible{outline:2px solid #14b8a6;outline-offset:2px}
+.agent-topbar-profile-button:disabled{cursor:wait;opacity:.65}
+.agent-topbar-profile-error{position:absolute;top:40px;right:0;width:max-content;max-width:280px;padding:7px 10px;border:1px solid #fecaca;border-radius:7px;background:#fff1f2;color:#b91c1c;box-shadow:0 5px 18px rgba(15,23,42,.12);font-size:11px}
+
   

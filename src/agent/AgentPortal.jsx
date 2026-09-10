@@ -3,7 +3,7 @@ import { agentSupabase } from "../shared/supabase";
 import MerchantFinanceModals from "../shared/MerchantFinanceModals";
 import MerchantControlModals from "../shared/MerchantControlModals";
 import MerchantActivityModals from "../shared/MerchantActivityModals";
-import { readImageFile } from "../shared/avatar";
+import { readImageFile, resizeImageToDataUrl } from "../shared/avatar";
 import AvatarCropper from "../shared/AvatarCropper";
 import {
   merchantActionKind,
@@ -17,7 +17,6 @@ import {
   rowSellerId,
   walletTotalsBySeller,
 } from "../shared/wallet";
-import { resizeImageToDataUrl } from "../shared/avatar";
 import "./AgentPortal.css";
 import "./AgentTeam.css";
 import "./AgentUnregistered.css";
@@ -183,6 +182,10 @@ export default function AgentPortal({ onLogout }) {
   const [active, setActive] = useState("Dashboard");
   const [copied, setCopied] = useState("");
   const [agentAvatar, setAgentAvatar] = useState("");
+  const [agentProfile, setAgentProfile] = useState(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const avatarInputRef = useRef(null);
   const [inviteCode, setPortalInviteCode] = useState("");
   const [inviteCodeEnabled, setInviteCodeEnabled] = useState(true);
   const inviteLink = inviteCodeEnabled && inviteCode
@@ -194,12 +197,14 @@ export default function AgentPortal({ onLogout }) {
     const loadAgentProfile = async () => {
       const { data } = await agentSupabase.auth.getUser();
       if (!mounted) return;
-      setAgentAvatar(data?.user?.user_metadata?.avatar_url || "");
       if (data?.user) {
         const { data: profile } = await agentSupabase.from("profiles")
-          .select("invitation_code,invitation_code_enabled")
+          .select("id,display_name,email,avatar_url,invitation_code,invitation_code_enabled")
           .eq("id", data.user.id).maybeSingle();
         if (mounted) {
+          const resolvedProfile = profile || { id: data.user.id, display_name: data.user.user_metadata?.display_name || data.user.email?.split("@")[0], email: data.user.email };
+          setAgentProfile(resolvedProfile);
+          setAgentAvatar(profile?.avatar_url || data.user.user_metadata?.avatar_url || "");
           setPortalInviteCode(profile?.invitation_code || "");
           setInviteCodeEnabled(profile?.invitation_code_enabled !== false);
         }
@@ -212,6 +217,33 @@ export default function AgentPortal({ onLogout }) {
       window.removeEventListener("agent-avatar-changed", loadAgentProfile);
     };
   }, []);
+
+  const agentName = agentProfile?.display_name || agentProfile?.email?.split("@")[0] || "Agent";
+  const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
+
+  const uploadAgentAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarError("");
+    try {
+      const avatarUrl = await resizeImageToDataUrl(file, 240);
+      const { data } = await agentSupabase.auth.getUser();
+      if (!data?.user) throw new Error("Your session has expired. Please sign in again.");
+      const { error: profileError } = await agentSupabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", data.user.id);
+      if (profileError) throw profileError;
+      const { error: authError } = await agentSupabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+      if (authError) throw authError;
+      setAgentAvatar(avatarUrl);
+      setAgentProfile((current) => current ? { ...current, avatar_url: avatarUrl } : current);
+      window.dispatchEvent(new CustomEvent("agent-avatar-changed"));
+    } catch (error) {
+      setAvatarError(error.message || "Could not update your profile photo.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const copy = async (text, label) => {
     await navigator.clipboard?.writeText(text);
@@ -267,13 +299,17 @@ export default function AgentPortal({ onLogout }) {
       <section className="agent-workspace">
         <header className="agent-topbar">
           <span>Agent Control Panel</span>
-          <div>
+          <div className="agent-topbar-profile">
+            <button className="agent-topbar-profile-button" type="button" title="Change profile photo" aria-label="Change profile photo" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
             {agentAvatar ? (
               <img className="agent-topbar-avatar" src={agentAvatar} alt="" />
             ) : (
-              <b>K</b>
+              <b>{agentInitial}</b>
             )}
-            <span>khan</span>
+            <span>{avatarBusy ? "Uploading…" : agentName}</span>
+            </button>
+            <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={uploadAgentAvatar} />
+            {avatarError && <small className="agent-topbar-profile-error">{avatarError}</small>}
           </div>
         </header>
         {active === "Dashboard" ? (
@@ -283,9 +319,10 @@ export default function AgentPortal({ onLogout }) {
             inviteCodeEnabled={inviteCodeEnabled}
             copy={copy}
             copied={copied}
+            agentName={agentName}
           />
         ) : active === "Agents" ? (
-          <AgentTeam />
+          <AgentTeam agentProfile={agentProfile} inviteCode={inviteCode} />
         ) : active === "Unregistered" ? (
           <AgentUnregistered />
         ) : active === "Applications" ? (
@@ -337,7 +374,7 @@ export default function AgentPortal({ onLogout }) {
         ) : active === "Audit Logs" ? (
           <AgentAuditLogs />
         ) : active === "My Account" ? (
-          <AgentMyAccount />
+          <AgentMyAccount agentProfile={agentProfile} />
         ) : (
           <section className="agent-coming-soon">
             <div>◇</div>
@@ -3203,38 +3240,24 @@ function AgentFeedbacks() {
   );
 }
 
-function AgentMyAccount() {
-  const [passwords, setPasswords] = useState({ password: "", confirm: "" });
-  const [notice, setNotice] = useState("");
-  const submit = async (event) => {
-    event.preventDefault();
-    if (passwords.password.length < 6)
-      return setNotice("Password must contain at least 6 characters.");
-    if (passwords.password !== passwords.confirm)
-      return setNotice("The passwords do not match.");
-    const { error } = await agentSupabase.auth.updateUser({
-      password: passwords.password,
-    });
-    setNotice(error ? error.message : "Password updated successfully.");
-    if (!error) setPasswords({ password: "", confirm: "" });
-  };
+function AgentMyAccount({ agentProfile }) {
   return (
     <div className="agent-final-page account-page">
       <header>
         <h2>My Account</h2>
-        <p>Your agent account details and security settings.</p>
+        <p>Your agent account details are managed by the platform admin.</p>
       </header>
       <section className="account-card">
         <h3>♧ &nbsp; Profile</h3>
         <div>
           <label>
-            AGENT NAME<strong>Demo Agent</strong>
+            AGENT NAME<strong>{agentProfile?.display_name || "Agent"}</strong>
           </label>
           <label>
-            AGENT ID<strong>AGT000004</strong>
+            AGENT ID<strong>{agentProfile?.id ? `AGT${agentProfile.id.slice(0, 8).toUpperCase()}` : "—"}</strong>
           </label>
           <label>
-            EMAIL<strong>ag•••@example.com</strong>
+            EMAIL<strong>{agentProfile?.email || "—"}</strong>
           </label>
           <label>
             STATUS<strong>Active</strong>
@@ -3246,32 +3269,8 @@ function AgentMyAccount() {
             MEMBER SINCE<strong>Aug 23, 2026</strong>
           </label>
         </div>
+        <p className="account-notice">Only your profile photo can be changed. Click your photo in the top-right corner to upload a new one.</p>
       </section>
-      <form className="account-card" onSubmit={submit}>
-        <h3>⌕ &nbsp; Change Password</h3>
-        <input
-          type="password"
-          minLength="6"
-          required
-          placeholder="New password"
-          value={passwords.password}
-          onChange={(event) =>
-            setPasswords({ ...passwords, password: event.target.value })
-          }
-        />
-        <input
-          type="password"
-          minLength="6"
-          required
-          placeholder="Confirm new password"
-          value={passwords.confirm}
-          onChange={(event) =>
-            setPasswords({ ...passwords, confirm: event.target.value })
-          }
-        />
-        <button type="submit">Update Password</button>
-        {notice && <p className="account-notice">{notice}</p>}
-      </form>
     </div>
   );
 }
@@ -5603,7 +5602,7 @@ function AgentUnregistered() {
   );
 }
 
-function AgentTeam() {
+function AgentTeam({ agentProfile, inviteCode }) {
   const summaries = [
     ["⌂", "ASSIGNED MERCHANTS", "3"],
     ["♧", "ACTIVE MERCHANTS", "3"],
@@ -5641,12 +5640,12 @@ function AgentTeam() {
           </div>
           <div className="agent-roster-row">
             <span className="agent-roster-name">
-              <b>K</b>
-              <strong>khan</strong>
+              <b>{(agentProfile?.display_name || "Agent").charAt(0).toUpperCase()}</b>
+              <strong>{agentProfile?.display_name || "Agent"}</strong>
             </span>
-            <code>AGT000004</code>
-            <code>P516326U</code>
-            <span>✉ agent@agent.com</span>
+            <code>{agentProfile?.id ? `AGT${agentProfile.id.slice(0, 8).toUpperCase()}` : "—"}</code>
+            <code>{inviteCode || "—"}</code>
+            <span>✉ {agentProfile?.email || "—"}</span>
             <span>
               <em>Lead agent</em>
             </span>
@@ -5664,11 +5663,11 @@ function AgentTeam() {
   );
 }
 
-function AgentDashboard({ inviteCode, inviteLink, inviteCodeEnabled, copy, copied }) {
+function AgentDashboard({ inviteCode, inviteLink, inviteCodeEnabled, copy, copied, agentName }) {
   return (
     <div className="agent-dashboard">
       <div className="agent-welcome">
-        <h2>Welcome back, khan</h2>
+        <h2>Welcome back, {agentName}</h2>
         <p>Here’s an overview of your seller network.</p>
       </div>
       <section className="agent-invite-grid">
