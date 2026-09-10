@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './StoreShowcase.css';
 import { adminSupabase } from '../shared/supabase';
+import { resizeImageToDataUrl } from '../shared/avatar';
 
 const categories = ['All', 'Accessories', 'Baby', 'Beauty', 'Electronics', 'Home & Garden', 'Kids', 'Men', 'Other', 'Sports', 'Women'];
 
@@ -17,6 +18,8 @@ export default function StoreShowcase() {
   const [editForm, setEditForm] = useState(emptyForm);
   const [deletingProductId, setDeletingProductId] = useState(null);
   const [productError, setProductError] = useState('');
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
 
   useEffect(() => {
     adminSupabase.from('products').select('*').order('created_at', { ascending: false }).then(({ data }) => {
@@ -51,6 +54,8 @@ export default function StoreShowcase() {
 
   const addProduct = async (event) => {
     event.preventDefault();
+    setAddingProduct(true);
+    setProductError('');
     const sellPrice = Number(form.sellPrice);
     const costPrice = Number(form.costPrice || 0);
     const stamp = Date.now().toString().slice(-6);
@@ -61,15 +66,52 @@ export default function StoreShowcase() {
       sellPrice,
       costPrice,
       category: form.category,
-      image: form.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=700&q=80',
+      image: form.image || null,
       link: form.link,
       description: form.description,
       onShelf: true,
     };
-    const { data } = await adminSupabase.from('products').insert({product_code:newProduct.id,sku:newProduct.sku,name:newProduct.name,sell_price:newProduct.sellPrice,cost_price:newProduct.costPrice,category:newProduct.category,image_url:newProduct.image,source_link:newProduct.link,description:newProduct.description,admin_on_shelf:true}).select().single();
-    setProducts((current) => [{ ...newProduct, dbId:data?.id }, ...current]);
+    const { data, error } = await adminSupabase.rpc('admin_create_showcase_product', {
+      new_product_code: newProduct.id,
+      new_sku: newProduct.sku,
+      new_name: newProduct.name,
+      new_sell_price: newProduct.sellPrice,
+      new_cost_price: newProduct.costPrice,
+      new_category: newProduct.category,
+      new_image_url: newProduct.image,
+      new_source_link: newProduct.link || null,
+      new_description: newProduct.description || null,
+    }).single();
+    setAddingProduct(false);
+    if (error || !data) {
+      setProductError(error?.message || 'The product was not saved to the database. Run the latest showcase SQL migration once.');
+      return;
+    }
+    setProducts((current) => [{ ...newProduct, dbId:data.id }, ...current]);
     setForm(emptyForm);
     setShowAddModal(false);
+  };
+
+  const setProductImageFile = async (file) => {
+    if (!file) return;
+    setImageBusy(true);
+    setProductError('');
+    try {
+      const image = await resizeImageToDataUrl(file, 700);
+      setForm((current) => ({ ...current, image }));
+    } catch (error) {
+      setProductError(error.message || 'Could not read that image.');
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const pasteProductImage = (event) => {
+    const file = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith('image/'))?.getAsFile();
+    if (file) {
+      event.preventDefault();
+      setProductImageFile(file);
+    }
   };
 
   const importProducts = () => {
@@ -149,16 +191,21 @@ export default function StoreShowcase() {
         <div className="showcase-modal add-showcase-modal">
           <div className="showcase-modal-header"><h3>Add Global Showcase Product</h3><button type="button" onClick={() => setShowAddModal(false)}>×</button></div>
           <form onSubmit={addProduct}>
-            <div className="showcase-modal-body">
+            <div className="showcase-modal-body" onPaste={pasteProductImage}>
+              {productError && <div className="showcase-delete-error">{productError}</div>}
               <label>Product Name *<input required placeholder="e.g. Wireless Earbuds Pro" value={form.name} onChange={(e) => updateForm('name', e.target.value)} /></label>
               <label>Sell Price (USD) *<input required min="0" step="0.01" type="number" placeholder="e.g. 29.99" value={form.sellPrice} onChange={(e) => updateForm('sellPrice', e.target.value)} /></label>
               <label>Cost Price (USD)<input min="0" step="0.01" type="number" placeholder="e.g. 15.00 (leave blank for 0)" value={form.costPrice} onChange={(e) => updateForm('costPrice', e.target.value)} /></label>
-              <label>Product Image URL<input type="url" placeholder="https://example.com/image.jpg" value={form.image} onChange={(e) => updateForm('image', e.target.value)} /></label>
+              <label>Product Image URL<input type="url" placeholder="https://example.com/image.jpg" value={form.image.startsWith('data:') ? '' : form.image} onChange={(e) => updateForm('image', e.target.value)} /></label>
+              <div className="showcase-image-upload" tabIndex="0" onPaste={pasteProductImage}>
+                {form.image ? <img src={form.image} alt="Product preview" /> : <span>Paste an image here or upload it from your device</span>}
+                <label className="showcase-image-upload-button">{imageBusy ? 'Processing…' : 'Upload image'}<input type="file" accept="image/*" hidden disabled={imageBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; setProductImageFile(file); }} /></label>
+              </div>
               <label>Category *<select required value={form.category} onChange={(e) => updateForm('category', e.target.value)}><option value="">— Select a category —</option>{categories.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
               <label>Product / Source Link<input type="url" placeholder="https://..." value={form.link} onChange={(e) => updateForm('link', e.target.value)} /></label>
               <label>Description<textarea placeholder="Brief product description..." value={form.description} onChange={(e) => updateForm('description', e.target.value)} /></label>
             </div>
-            <div className="showcase-modal-footer"><button type="button" onClick={() => setShowAddModal(false)}>Cancel</button><button type="submit">Add Product</button></div>
+            <div className="showcase-modal-footer"><button type="button" onClick={() => setShowAddModal(false)}>Cancel</button><button type="submit" disabled={addingProduct || imageBusy}>{addingProduct ? 'Saving…' : 'Add Product'}</button></div>
           </form>
         </div>
       </div>}

@@ -86,3 +86,44 @@ $$;
 
 revoke all on function public.admin_delete_product_permanently(text) from public;
 grant execute on function public.admin_delete_product_permanently(text) to authenticated;
+
+-- Create products through an admin-only function so inserts are persisted even
+-- when direct table writes are protected by Row Level Security.
+create or replace function public.admin_create_showcase_product(
+  new_product_code text,
+  new_sku text,
+  new_name text,
+  new_sell_price numeric,
+  new_cost_price numeric,
+  new_category text,
+  new_image_url text default null,
+  new_source_link text default null,
+  new_description text default null
+)
+returns public.products
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  created_product public.products%rowtype;
+begin
+  if not public.is_admin() then
+    raise exception 'Administrator access required';
+  end if;
+
+  insert into public.products (
+    product_code, sku, name, sell_price, cost_price, category,
+    image_url, source_link, description, admin_on_shelf
+  ) values (
+    new_product_code, new_sku, new_name, new_sell_price,
+    coalesce(new_cost_price, 0), new_category, new_image_url,
+    new_source_link, new_description, true
+  ) returning * into created_product;
+
+  return created_product;
+end;
+$$;
+
+revoke all on function public.admin_create_showcase_product(text, text, text, numeric, numeric, text, text, text, text) from public;
+grant execute on function public.admin_create_showcase_product(text, text, text, numeric, numeric, text, text, text, text) to authenticated;
