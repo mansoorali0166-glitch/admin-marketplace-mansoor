@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./SellerMessages.css";
+import "./SellerMessagesEnhancements.css";
 
 const tabs = ["Announcements", "Order Notices", "Buyer Messages", "Platform Msgs"];
 
@@ -69,6 +70,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
   const [openThread, setOpenThread]             = useState(null);
   const [reply, setReply]                       = useState("");
   const [loading, setLoading]                   = useState(true);
+  const [messageError, setMessageError]         = useState("");
 
   const bubblesEndRef = useRef(null);
   const textareaRef   = useRef(null);
@@ -77,11 +79,12 @@ export default function SellerMessages({ client, sellerId, onBack }) {
     if (!client || !sellerId) return;
     const load = async () => {
       setLoading(true);
+      setMessageError("");
       const [announcementsRes, messagesRes, ordersRes] = await Promise.all([
         client.from("announcements").select("*").order("created_at", { ascending: false }),
         client
           .from("messages")
-          .select("*,product:products(id,name,product_code,sell_price,image_url)")
+          .select("*")
           .in("channel", ["platform", "buyer", "agent", "service"])
           .or(`sender_id.eq.${sellerId},recipient_id.eq.${sellerId}`)
           .order("created_at", { ascending: true }),
@@ -93,7 +96,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
           .limit(20),
       ]);
 
-      if (messagesRes.error) console.log("SELLER MESSAGES LOAD ERROR:", messagesRes.error);
+      if (messagesRes.error) setMessageError(`Could not load messages: ${messagesRes.error.message}`);
 
       const partnerIds = [
         ...new Set(
@@ -197,7 +200,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
         id:        item.id,
         mine:      item.sender_id === sellerId,
         text:      item.body,
-        product:   item.product,
+        product:   null,
         imageUrl:  item.image_url,
         date:      new Date(item.created_at).toLocaleString(),
         createdAt: item.created_at,
@@ -227,7 +230,8 @@ export default function SellerMessages({ client, sellerId, onBack }) {
       body:         reply.trim(),
       image_url:    activeThread?.buyerContext || null,
     });
-    if (error) { console.log("SEND REPLY ERROR:", error); return; }
+    if (error) { setMessageError(`Message was not sent: ${error.message}`); return; }
+    setMessageError("");
     setReply("");
     if (textareaRef.current) textareaRef.current.style.height = "44px";
   };
@@ -275,6 +279,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
 
       {/* Body */}
       <div className="sm-body">
+        {messageError && <div className="sm-message-error" role="alert">{messageError}</div>}
         {loading ? (
           <div className="sm-loading">
             <span className="sm-spinner" />

@@ -29,6 +29,8 @@ import "./AgentBoundAddresses.css";
 import "./AgentCreditLogs.css";
 import "./AgentBalanceLocks.css";
 import "./AgentOrderManagement.css";
+import "./AgentMessagingEnhancements.css";
+import "./AgentMessagingEnhancements.css";
 import "./AgentOrderList.css";
 import "./AgentBatchShip.css";
 import "./AgentBatchReceive.css";
@@ -377,16 +379,10 @@ const defaultAgentConfig = {
 };
 
 function AgentMessages() {
-  const [messages, setMessages] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("agent_admin_messages") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const fileInput = React.useRef(null);
+  const [sendError, setSendError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -431,14 +427,11 @@ function AgentMessages() {
     };
   }, []);
 
-  const persist = (next) => {
-    setMessages(next);
-    localStorage.setItem("agent_admin_messages", JSON.stringify(next));
-  };
   const send = async (event) => {
     event.preventDefault();
     if (!message.trim() || sending) return;
     setSending(true);
+    setSendError("");
     const text = message.trim();
     const fallback = {
       id: Date.now(),
@@ -457,9 +450,12 @@ function AgentMessages() {
       .select("id")
       .eq("role", "admin")
       .limit(1);
-    let saved;
-    if (auth?.user && admins?.[0]) {
-      const response = await agentSupabase
+    if (!auth?.user || !admins?.[0]) {
+      setSendError("Could not find the administrator account. Please refresh and try again.");
+      setSending(false);
+      return;
+    }
+    const response = await agentSupabase
         .from("messages")
         .insert({
           sender_id: auth.user.id,
@@ -469,34 +465,14 @@ function AgentMessages() {
         })
         .select()
         .single();
-      saved = response.data;
+    if (response.error) {
+      setSendError(`Message was not sent: ${response.error.message}`);
+      setSending(false);
+      return;
     }
-    persist([...messages, saved ? { ...fallback, id: saved.id } : fallback]);
+    setMessages((current) => current.some((item) => item.id === response.data.id) ? current : [...current, { ...fallback, id: response.data.id }]);
     setMessage("");
     setSending(false);
-  };
-  const attach = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () =>
-      persist([
-        ...messages,
-        {
-          id: Date.now(),
-          mine: true,
-          text: file.name,
-          image: reader.result,
-          date: new Date().toLocaleString("en-US", {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-        },
-      ]);
-    reader.readAsDataURL(file);
-    event.target.value = "";
   };
   return (
     <div className="agent-messages-page">
@@ -523,23 +499,9 @@ function AgentMessages() {
             </div>
           )}
         </div>
+        {sendError && <p className="agent-message-error" role="alert">{sendError}</p>}
         <form onSubmit={send} className="agent-messages-form">
           <div className="agent-messages-input-row">
-            <button
-              type="button"
-              className="agent-msg-icon-btn"
-              aria-label="Attach file"
-              onClick={() => fileInput.current?.click()}
-            >
-              ⌕
-            </button>
-            <input
-              ref={fileInput}
-              hidden
-              type="file"
-              accept="image/*"
-              onChange={attach}
-            />
             <textarea
               className="agent-msg-textarea"
               aria-label="Message"

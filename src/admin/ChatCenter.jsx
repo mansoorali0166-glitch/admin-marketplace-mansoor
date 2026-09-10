@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./ChatCenter.css";
+import "./ChatCenterEnhancements.css";
 import { adminSupabase } from "../shared/supabase";
 
 const templates = {
@@ -25,6 +26,8 @@ export default function ChatCenter() {
   const [broadcastTarget, setBroadcastTarget] = useState("seller"); // 'seller' | 'agent' | 'all'
   const [sender, setSender] = useState("Platform Support");
   const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [sending, setSending] = useState(false);
 
   // Loaded profiles
   const [allSellers, setAllSellers] = useState([]);
@@ -228,6 +231,7 @@ export default function ChatCenter() {
 
       if (data) {
         setThreadMessages(data);
+        await adminSupabase.from("messages").update({ read_at: new Date().toISOString() }).eq("sender_id", targetUserId).eq("recipient_id", adminId).is("read_at", null);
       }
     } catch (err) {
       console.error("Error loading thread history:", err);
@@ -280,21 +284,24 @@ export default function ChatCenter() {
   // Send message from 'Send Message' tab
   const sendMessage = async (event) => {
     event.preventDefault();
+    setFeedback("");
+    setSending(true);
     try {
       const { data: auth } = await adminSupabase.auth.getUser();
-      if (!auth?.user) return;
+      if (!auth?.user) throw new Error("Your admin session has expired. Please sign in again.");
 
       if (sendMode === "Individual") {
         if (!recipientId) return;
 
         const channel = recipientRole === "agent" ? "agent" : "service";
 
-        await adminSupabase.from("messages").insert({
+        const { error } = await adminSupabase.from("messages").insert({
           sender_id: auth.user.id,
           recipient_id: recipientId,
           channel,
           body: message.trim(),
         });
+        if (error) throw error;
       } else {
         // Broadcast Mode
         let recipients = [];
@@ -313,7 +320,7 @@ export default function ChatCenter() {
         }
 
         if (recipients.length > 0) {
-          await adminSupabase.from("messages").insert(
+          const { error } = await adminSupabase.from("messages").insert(
             recipients.map((r) => ({
               sender_id: auth.user.id,
               recipient_id: r.id,
@@ -321,15 +328,19 @@ export default function ChatCenter() {
               body: message.trim(),
             })),
           );
+          if (error) throw error;
         }
       }
 
       setMessage("");
       setRecipientId("");
       await Promise.all([loadSellerConversations(), loadAgentConversations()]);
-      alert("Message sent successfully!");
+      setFeedback("Message sent successfully.");
     } catch (err) {
       console.error("Error sending message:", err);
+      setFeedback(`Message was not sent: ${err.message || "Database error"}`);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -344,39 +355,45 @@ export default function ChatCenter() {
 
       const channel = activeThread.type === "agent" ? "agent" : "service";
 
-      await adminSupabase.from("messages").insert({
+      const { error } = await adminSupabase.from("messages").insert({
         sender_id: auth.user.id,
         recipient_id: activeThread.userId,
         channel,
         body: threadReply.trim(),
       });
+      if (error) throw error;
 
       setThreadReply("");
       await loadThreadHistory(activeThread.userId, activeThread.type);
       await Promise.all([loadSellerConversations(), loadAgentConversations()]);
     } catch (err) {
       console.error("Error sending thread reply:", err);
+      setFeedback(`Reply was not sent: ${err.message || "Database error"}`);
     }
   };
 
   // Publish announcement
   const publishAnnouncement = async (event) => {
     event.preventDefault();
+    setFeedback("");
     try {
       const { data: auth } = await adminSupabase.auth.getUser();
       if (!auth?.user) return;
 
-      await adminSupabase.from("announcements").insert({
+      const { error } = await adminSupabase.from("announcements").insert({
         title: announcementForm.title.trim(),
         message: announcementForm.content.trim(),
         target_type: "all",
         created_by: auth.user.id,
       });
+      if (error) throw error;
 
       setAnnouncementForm({ title: "", content: "" });
       await loadAnnouncements();
+      setFeedback("Announcement published successfully.");
     } catch (err) {
       console.error("Error publishing announcement:", err);
+      setFeedback(`Announcement was not published: ${err.message || "Database error"}`);
     }
   };
 
@@ -421,6 +438,7 @@ export default function ChatCenter() {
           </button>
         ))}
       </nav>
+      {feedback && <p className={`chat-feedback ${feedback.includes("not ") ? "error" : "success"}`} role="status">{feedback}</p>}
 
       {/* TAB 1: SEND MESSAGE */}
       {activeTab === "Send Message" && (
@@ -544,10 +562,10 @@ export default function ChatCenter() {
               className="send-message-submit"
               type="submit"
               disabled={
-                !message.trim() || (sendMode === "Individual" && !recipientId)
+                sending || !message.trim() || (sendMode === "Individual" && !recipientId)
               }
             >
-              ➤ Send Message
+              {sending ? "Sending…" : "➤ Send Message"}
             </button>
           </form>
         </div>
