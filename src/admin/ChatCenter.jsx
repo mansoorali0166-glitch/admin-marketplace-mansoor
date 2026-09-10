@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./ChatCenter.css";
 import "./ChatCenterEnhancements.css";
+import "./ChatDropdowns.css";
 import { adminSupabase } from "../shared/supabase";
 
 const templates = {
@@ -24,7 +25,6 @@ export default function ChatCenter() {
   const [recipientRole, setRecipientRole] = useState("seller"); // 'seller' | 'agent'
   const [recipientId, setRecipientId] = useState("");
   const [broadcastTarget, setBroadcastTarget] = useState("seller"); // 'seller' | 'agent' | 'all'
-  const [sender, setSender] = useState("Platform Support");
   const [message, setMessage] = useState("");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
@@ -463,13 +463,7 @@ export default function ChatCenter() {
           <form className="send-message-card" onSubmit={sendMessage}>
             {sendMode === "Individual" ? (
               <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 2fr",
-                    gap: "1rem",
-                  }}
-                >
+                <div className="message-recipient-grid">
                   <label>
                     Recipient Type
                     <select
@@ -521,15 +515,6 @@ export default function ChatCenter() {
                 </select>
               </label>
             )}
-
-            <label>
-              Sender Name
-              <input
-                required
-                value={sender}
-                onChange={(event) => setSender(event.target.value)}
-              />
-            </label>
 
             <div className="quick-templates">
               <span>Quick Templates</span>
