@@ -452,18 +452,7 @@ export default function AgentPortal({ onLogout }) {
   );
 }
 
-const demoOrderRecords = [
-  ["Aug 23, 2026 02:05 AM", "Auto orders generated", "1 demo order"],
-  ["Aug 10, 2026 02:01 AM", "Batch shipped", "Order DEMO-SHIP-01"],
-  ["Aug 8, 2026 01:16 AM", "Batch received", "Order DEMO-RECV-01"],
-  ["Aug 8, 2026 01:13 AM", "Order created", "#DEMO-1001 · Pink Kids Backpack"],
-  ["Aug 4, 2026 12:36 AM", "Batch received", "Order DEMO-RECV-02"],
-  ["Aug 3, 2026 07:44 PM", "Order created", "#DEMO-1004 · Headphones"],
-  ["Aug 2, 2026 11:03 AM", "Batch shipped", "Order DEMO-SHIP-02"],
-  ["Jul 31, 2026 12:57 AM", "Order created", "#DEMO-1005 · Data Cable"],
-  ["Jul 29, 2026 01:30 AM", "Order created", "#DEMO-1002 · Demo Phone"],
-  ["Jul 28, 2026 10:17 PM", "Order created", "#DEMO-1006 · Headphones"],
-];
+const demoOrderRecords = [];
 
 const defaultAgentConfig = {
   displayName: "Demo Agent",
@@ -3714,7 +3703,7 @@ function AgentBatchReceive() {
     demoManagedOrders.filter((order) => order.status === "Pending Receive"),
   );
   const [selected, setSelected] = useState(
-    () => new Set([demoManagedOrders[0].id]),
+    () => new Set(),
   );
   const toggle = (id) =>
     setSelected((current) => {
@@ -4138,85 +4127,7 @@ function AgentOrderList() {
   );
 }
 
-const demoManagedOrders = [
-  {
-    id: "DEMO-1001",
-    seller: "Demo Merchant",
-    product: "Pink Kids Backpack",
-    customer: "Demo Customer A",
-    qty: 1,
-    sale: 200.1,
-    profit: 40.02,
-    status: "Pending Receive",
-    date: "Aug 8, 2026",
-  },
-  {
-    id: "DEMO-1002",
-    seller: "Demo Merchant",
-    product: "Demo Phone",
-    customer: "Demo Customer B",
-    qty: 1,
-    sale: 30,
-    profit: 5,
-    status: "Pending Receive",
-    date: "Jul 29, 2026",
-  },
-  {
-    id: "DEMO-1003",
-    seller: "Demo Merchant",
-    product: "Data Cable",
-    customer: "Demo Customer C",
-    qty: 1,
-    sale: 10,
-    profit: 2,
-    status: "Pending Receive",
-    date: "Jul 26, 2026",
-  },
-  {
-    id: "DEMO-1004",
-    seller: "Demo Merchant",
-    product: "Headphones",
-    customer: "Demo Customer A",
-    qty: 1,
-    sale: 20,
-    profit: 20,
-    status: "Completed",
-    date: "Aug 3, 2026",
-  },
-  {
-    id: "DEMO-1005",
-    seller: "Demo Merchant",
-    product: "Data Cable",
-    customer: "Demo Customer B",
-    qty: 1,
-    sale: 10,
-    profit: 2,
-    status: "Completed",
-    date: "Jul 31, 2026",
-  },
-  {
-    id: "DEMO-1006",
-    seller: "Demo Merchant",
-    product: "Headphones",
-    customer: "Demo Customer C",
-    qty: 2,
-    sale: 40,
-    profit: 40,
-    status: "Completed",
-    date: "Jul 28, 2026",
-  },
-  {
-    id: "DEMO-1007",
-    seller: "Demo Merchant",
-    product: "Demo Phone",
-    customer: "Demo Customer D",
-    qty: 1,
-    sale: 30,
-    profit: 5,
-    status: "Refund",
-    date: "Jul 27, 2026",
-  },
-];
+const demoManagedOrders = [];
 
 const agentOrderStatuses = [
   { value: "Pending Payment", label: "Pending Pay" },
