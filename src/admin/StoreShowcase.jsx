@@ -15,6 +15,8 @@ export default function StoreShowcase() {
   const [form, setForm] = useState(emptyForm);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [deletingProductId, setDeletingProductId] = useState(null);
+  const [productError, setProductError] = useState('');
 
   useEffect(() => {
     adminSupabase.from('products').select('*').order('created_at', { ascending: false }).then(({ data }) => {
@@ -83,8 +85,18 @@ export default function StoreShowcase() {
   };
 
   const deleteProduct = async (product) => {
+    if (!window.confirm(`Permanently delete ${product.name}? It will be removed from every seller and agent showcase.`)) return;
+    setDeletingProductId(product.dbId || product.id);
+    setProductError('');
+    const { data: deleted, error } = await adminSupabase.rpc('admin_delete_product_permanently', {
+      target_product_id: String(product.dbId || product.id),
+    });
+    setDeletingProductId(null);
+    if (error || !deleted) {
+      setProductError(error?.message || 'The database did not delete this product. Run the product deletion SQL migration first.');
+      return;
+    }
     setProducts((current) => current.filter((item) => item.id !== product.id));
-    await adminSupabase.from('products').delete().eq(product.dbId ? 'id' : 'product_code', product.dbId || product.id);
   };
 
   return (
@@ -99,6 +111,7 @@ export default function StoreShowcase() {
         <button className="import-products-btn" type="button" onClick={() => setShowImportModal(true)}>⇧ <span>Import Seller Products</span></button>
         <button className="add-product-btn" type="button" onClick={() => setShowAddModal(true)}>＋ <span>Add Product</span></button>
       </div>
+      {productError && <div className="showcase-delete-error">{productError}</div>}
 
       <div className="showcase-categories">
         {categories.map((item) => <button type="button" key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item !== 'All' && <span>◇</span>}{item}</button>)}
@@ -123,7 +136,7 @@ export default function StoreShowcase() {
               <div className="product-actions">
                 <button type="button" className={`shelf-toggle ${product.onShelf ? 'on' : ''}`} onClick={() => toggleProductShelf(product)}>◉ {product.onShelf ? 'On' : 'Off'}</button>
                 <button type="button" className="edit-product" onClick={() => openEditModal(product)} aria-label={`Edit ${product.name}`}>✎</button>
-                <button type="button" className="delete-product" onClick={() => deleteProduct(product)} aria-label={`Delete ${product.name}`}>♲</button>
+                <button type="button" className="delete-product" disabled={deletingProductId === (product.dbId || product.id)} onClick={() => deleteProduct(product)} aria-label={`Delete ${product.name}`}>{deletingProductId === (product.dbId || product.id) ? '…' : '♲'}</button>
               </div>
             </div>
           </article>;

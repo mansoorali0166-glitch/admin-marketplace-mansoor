@@ -4,3 +4,4 @@
 @media(max-width:1050px){.product-grid{grid-template-columns:repeat(3,minmax(180px,1fr))}.showcase-search{width:45%}}
 @media(max-width:768px){.showcase-toolbar{flex-wrap:wrap}.showcase-search{width:100%}.add-product-btn{margin-left:0}.showcase-stats{gap:8px}.showcase-stats div{height:78px}.showcase-stats strong{font-size:22px}.product-grid{grid-template-columns:repeat(2,minmax(145px,1fr));gap:10px}.product-image{height:180px}.showcase-modal{border-radius:14px}.import-showcase-modal{padding:24px 18px}}
 @media(max-width:430px){.showcase-toolbar button{flex:1;padding:0 10px}.showcase-stats{grid-template-columns:1fr}.product-grid{grid-template-columns:1fr}.product-image{height:240px}}
+.showcase-delete-error{margin:-6px 0 18px;padding:12px 14px;border:1px solid #fecaca;border-radius:9px;background:#fff1f2;color:#b91c1c;font-size:13px}.delete-product:disabled{cursor:wait;opacity:.55}
