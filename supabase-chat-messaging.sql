@@ -1,6 +1,14 @@
 -- Run once in Supabase Dashboard > SQL Editor.
 -- Enables secure, realtime chat between admins, agents, and merchants.
 
+-- Bring older deployments up to the columns used by the current portals.
+alter table public.announcements add column if not exists target_type text not null default 'all';
+alter table public.announcements add column if not exists target_user_id uuid references public.profiles(id) on delete set null;
+alter table public.announcements add column if not exists created_by uuid references public.profiles(id) on delete set null;
+alter table public.messages add column if not exists channel text not null default 'service';
+alter table public.messages add column if not exists image_url text;
+alter table public.messages add column if not exists read_at timestamptz;
+
 alter table public.messages enable row level security;
 alter table public.announcements enable row level security;
 
