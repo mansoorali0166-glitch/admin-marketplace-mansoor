@@ -1,11 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './SuspendedAgents.css';
+import { adminSupabase } from '../shared/supabase';
+import AgentStatusModal from './AgentStatusModal';
 
 export default function SuspendedAgents() {
   const [search, setSearch] = useState('');
+  const [suspendedAgents, setSuspendedAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [managedAgent, setManagedAgent] = useState(null);
 
-  // For now there are no suspended agents
-  const suspendedAgents = [];
+  const loadSuspendedAgents = async () => {
+    setLoading(true);
+    const { data, error } = await adminSupabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'agent')
+      .order('created_at', { ascending: false });
+
+    if (!error) {
+      setSuspendedAgents((data || [])
+        .filter((profile) => profile.status?.toLowerCase() === 'suspended' || profile.allow_login === false)
+        .map((profile) => ({
+          id: profile.id.slice(0, 8).toUpperCase(),
+          dbId: profile.id,
+          name: profile.display_name || profile.full_name || profile.email || 'Agent',
+          email: profile.email,
+          company: profile.company_name || '—',
+          invitationCode: profile.invitation_code || '••••••••',
+          status: 'Suspended',
+          sellers: profile.seller_count || 0,
+          pending: profile.pending_sellers || 0,
+          commission: `$ ${Number(profile.commission_rate || 0).toFixed(2)}`,
+          wallet: `$ ${Number(profile.wallet_balance || 0).toFixed(2)}`,
+          lastLogin: profile.last_login ? new Date(profile.last_login).toLocaleDateString() : '—',
+        })));
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadSuspendedAgents();
+  }, []);
 
   const filteredAgents = suspendedAgents.filter((agent) => {
     const value = search.toLowerCase();
@@ -34,7 +69,7 @@ export default function SuspendedAgents() {
           </p>
         </div>
 
-        <button className="suspended-refresh-btn">
+        <button className="suspended-refresh-btn" type="button" onClick={loadSuspendedAgents}>
           ↻
         </button>
 
@@ -77,6 +112,7 @@ export default function SuspendedAgents() {
               <th>COMMISSION</th>
               <th>WALLET</th>
               <th>LAST LOGIN</th>
+              <th>ACTIONS</th>
             </tr>
 
           </thead>
@@ -84,11 +120,13 @@ export default function SuspendedAgents() {
 
           <tbody>
 
-            {filteredAgents.length === 0 ? (
+            {loading ? (
+              <tr><td colSpan="10" className="suspended-empty-state">Loading suspended agents...</td></tr>
+            ) : filteredAgents.length === 0 ? (
 
               <tr>
                 <td
-                  colSpan="9"
+                  colSpan="10"
                   className="suspended-empty-state"
                 >
                   No suspended agents.
@@ -161,6 +199,16 @@ export default function SuspendedAgents() {
                     {agent.lastLogin}
                   </td>
 
+                  <td>
+                    <button
+                      className="suspended-manage-btn"
+                      type="button"
+                      onClick={() => setManagedAgent(agent)}
+                    >
+                      Manage
+                    </button>
+                  </td>
+
                 </tr>
 
               ))
@@ -172,6 +220,12 @@ export default function SuspendedAgents() {
         </table>
 
       </div>
+
+      <AgentStatusModal
+        agent={managedAgent}
+        onClose={() => setManagedAgent(null)}
+        onChanged={loadSuspendedAgents}
+      />
 
     </div>
   );

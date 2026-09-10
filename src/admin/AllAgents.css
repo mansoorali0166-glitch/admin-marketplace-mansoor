@@ -690,9 +690,9 @@
    ========================================================= */
 
 .new-agent-modal-footer {
-  display: grid;
+  display: flex;
 
-  grid-template-columns: 1fr 1fr;
+  justify-content: flex-end;
 
   gap: 10px;
 
@@ -721,6 +721,8 @@
 }
 
 .new-agent-create-btn {
+  width: 100%;
+
   border: none;
 
   background: #6f97ed;

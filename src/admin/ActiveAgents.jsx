@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./ActiveAgents.css";
 import { adminSupabase } from "../shared/supabase";
+import AgentStatusModal from "./AgentStatusModal";
 
 export default function ActiveAgents({
   onNavigateToChat,
@@ -10,6 +11,7 @@ export default function ActiveAgents({
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [managedAgent, setManagedAgent] = useState(null);
 
   // Fetch active agents dynamically from Supabase
   const loadActiveAgents = async () => {
@@ -27,7 +29,7 @@ export default function ActiveAgents({
         setAgents(
           profiles
             .filter((p) => p.role && p.role.toLowerCase() === "agent")
-            .filter((p) => !p.status || p.status.toLowerCase() === "active")
+            .filter((p) => p.allow_login !== false && (!p.status || p.status.toLowerCase() === "active"))
             .map((p) => ({
               id: p.id ? p.id.slice(0, 8).toUpperCase() : "AGT00000",
               dbId: p.id,
@@ -207,9 +209,10 @@ export default function ActiveAgents({
                       <button
                         className="agent-action manage"
                         type="button"
-                        onClick={() =>
-                          onManageAgent && onManageAgent(agent.dbId)
-                        }
+                        onClick={() => {
+                          setManagedAgent(agent);
+                          onManageAgent?.(agent.dbId);
+                        }}
                       >
                         Manage
                       </button>
@@ -243,6 +246,11 @@ export default function ActiveAgents({
           </tbody>
         </table>
       </div>
+      <AgentStatusModal
+        agent={managedAgent}
+        onClose={() => setManagedAgent(null)}
+        onChanged={loadActiveAgents}
+      />
     </div>
   );
 }

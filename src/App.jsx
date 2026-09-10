@@ -28,8 +28,10 @@ export default function App() {
     client.auth.getSession().then(async ({ data }) => {
       if (isSellerPortal) setIsSellerLoggedIn(Boolean(data.session));
       else if (isAgentPortal && data.session) {
-        const { data: profile } = await agentSupabase.from('profiles').select('role').eq('id', data.session.user.id).maybeSingle();
-        setIsAgentLoggedIn(profile?.role === 'agent');
+        const { data: profile } = await agentSupabase.from('profiles').select('role,status,allow_login').eq('id', data.session.user.id).maybeSingle();
+        const canAccess = profile?.role === 'agent' && profile.allow_login !== false && profile.status?.toLowerCase() !== 'suspended';
+        if (!canAccess) await agentSupabase.auth.signOut();
+        setIsAgentLoggedIn(canAccess);
       }
       else setIsAdminLoggedIn(Boolean(data.session));
       setAuthLoading(false);

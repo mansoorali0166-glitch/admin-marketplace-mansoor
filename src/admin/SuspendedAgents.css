@@ -271,6 +271,14 @@
   font-weight: 500;
 }
 
+.suspended-manage-btn {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  cursor: pointer;
+}
+
 
 /* =========================================================
    RESPONSIVE

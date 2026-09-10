@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./AllAgents.css";
 import { adminSupabase } from "../shared/supabase";
+import AgentStatusModal from "./AgentStatusModal";
 
 export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
   const [showNewAgentModal, setShowNewAgentModal] = useState(false);
@@ -9,6 +10,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [managedAgent, setManagedAgent] = useState(null);
 
   const [newAgent, setNewAgent] = useState({
     fullName: "",
@@ -298,7 +300,11 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
                   <td className="last-login">{agent.lastLogin}</td>
                   <td>
                     <div className="agent-actions">
-                      <button className="agent-action manage" type="button">
+                      <button
+                        className="agent-action manage"
+                        type="button"
+                        onClick={() => setManagedAgent(agent)}
+                      >
                         Manage
                       </button>
                       <button
@@ -453,40 +459,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
               />
             </div>
 
-            <div className="new-agent-form-group">
-              <label>Status *</label>
-              <div className="new-agent-status-buttons">
-                <button
-                  type="button"
-                  className={`agent-status-option ${
-                    newAgent.status === "Active" ? "selected-active" : ""
-                  }`}
-                  onClick={() => setNewAgent({ ...newAgent, status: "Active" })}
-                >
-                  Active
-                </button>
-                <button
-                  type="button"
-                  className={`agent-status-option ${
-                    newAgent.status === "Suspended" ? "selected-suspended" : ""
-                  }`}
-                  onClick={() =>
-                    setNewAgent({ ...newAgent, status: "Suspended" })
-                  }
-                >
-                  Suspended
-                </button>
-              </div>
-            </div>
-
             <div className="new-agent-modal-footer">
-              <button
-                type="button"
-                className="new-agent-cancel-btn"
-                onClick={() => setShowNewAgentModal(false)}
-              >
-                Cancel
-              </button>
               <button
                 type="submit"
                 className="new-agent-create-btn"
@@ -499,6 +472,11 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
         </div>
         </div>
       )}
+      <AgentStatusModal
+        agent={managedAgent}
+        onClose={() => setManagedAgent(null)}
+        onChanged={loadAgents}
+      />
     </div>
   );
 }
