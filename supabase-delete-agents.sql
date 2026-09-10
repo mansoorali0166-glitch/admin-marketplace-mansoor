@@ -42,6 +42,11 @@ begin
   update public.merchant_clicks set created_by=null where created_by=target_agent_id;
   update public.balance_locks set created_by=null where created_by=target_agent_id;
 
+  -- Older projects use a restrictive profiles -> auth.users foreign key,
+  -- so remove the fully detached public profile before the Auth account.
+  delete from public.profiles where id=target_agent_id and role='agent';
+  if not found then raise exception 'Agent profile could not be deleted'; end if;
+
   delete from auth.users where id=target_agent_id;
   if not found then raise exception 'Agent authentication account not found'; end if;
   return true;
