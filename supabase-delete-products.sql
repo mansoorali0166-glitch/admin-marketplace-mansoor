@@ -8,7 +8,8 @@ security definer
 set search_path = public
 as $$
 declare
-  resolved_product_id uuid;
+  -- Match the real products.id type (some installations use bigint, others UUID).
+  resolved_product_id public.products.id%type;
 begin
   if not public.is_admin() then
     raise exception 'Administrator access required';
