@@ -112,7 +112,7 @@ export default function AllOrders() {
     const directUpdate = await adminSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId).select("id").maybeSingle();
     let error = directUpdate.error;
     if (error || !directUpdate.data) {
-      const rpcResult = await adminSupabase.rpc("admin_update_order_status", { order_id: order.dbId, new_status: status });
+      const rpcResult = await adminSupabase.rpc("admin_update_order_status", { order_id_text: String(order.dbId), new_status: status });
       error = rpcResult.error;
     }
     if (error) {

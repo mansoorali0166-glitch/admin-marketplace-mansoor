@@ -4260,7 +4260,14 @@ function useLiveAgentOrders() {
         load,
       )
       .subscribe();
-    return () => agentSupabase.removeChannel(channel);
+    const refreshTimer = window.setInterval(load, 15000);
+    const refreshOnFocus = () => load();
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+      agentSupabase.removeChannel(channel);
+    };
   }, [load]);
   return [orders, setOrders, load];
 }

@@ -72,7 +72,10 @@ begin
 end;
 $$;
 
-create or replace function public.admin_update_order_status(order_id uuid, new_status text)
+drop function if exists public.admin_update_order_status(uuid,text);
+drop function if exists public.admin_update_order_status(text,text);
+
+create function public.admin_update_order_status(order_id_text text, new_status text)
 returns boolean
 language plpgsql
 security definer
@@ -85,13 +88,13 @@ begin
   if new_status not in ('Pending Payment','Paid','Pending Ship','Pending Receive','Completed','Rejected','Cancelled','Refund') then
     raise exception 'Invalid order status';
   end if;
-  update public.orders set status=new_status, updated_at=now() where id=order_id;
+  update public.orders set status=new_status, updated_at=now() where id::text=trim(order_id_text);
   return found;
 end;
 $$;
 
 grant execute on function public.admin_list_orders() to authenticated;
-grant execute on function public.admin_update_order_status(uuid,text) to authenticated;
+grant execute on function public.admin_update_order_status(text,text) to authenticated;
 create table if not exists public.announcements (
   id uuid primary key default gen_random_uuid(), title text not null, message text not null,
   target_type text not null default 'all', target_user_id uuid references public.profiles(id), created_by uuid references public.profiles(id), created_at timestamptz not null default now()
