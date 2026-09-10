@@ -5,7 +5,7 @@ import { resizeImageToDataUrl } from '../shared/avatar';
 
 const categories = ['All', 'Accessories', 'Baby', 'Beauty', 'Electronics', 'Home & Garden', 'Kids', 'Men', 'Other', 'Sports', 'Women'];
 
-const emptyForm = { name: '', sellPrice: '', costPrice: '', image: '', category: '', link: '', description: '' };
+const emptyForm = { name: '', sellPrice: '', costPrice: '', image: '', category: '', description: '' };
 
 export default function StoreShowcase() {
   const [products, setProducts] = useState([]);
@@ -23,7 +23,7 @@ export default function StoreShowcase() {
 
   useEffect(() => {
     adminSupabase.from('products').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-      setProducts((data || []).map((item) => ({ dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,link:item.source_link,description:item.description,onShelf:item.admin_on_shelf })));
+      setProducts((data || []).map((item) => ({ dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,description:item.description,onShelf:item.admin_on_shelf })));
     });
   }, []);
 
@@ -42,13 +42,13 @@ export default function StoreShowcase() {
 
   const openEditModal = (product) => {
     setEditingProduct(product);
-    setEditForm({ name: product.name, sellPrice: product.sellPrice, costPrice: product.costPrice, image: product.image, category: product.category, link: product.link || '', description: product.description || '' });
+    setEditForm({ name: product.name, sellPrice: product.sellPrice, costPrice: product.costPrice, image: product.image, category: product.category, description: product.description || '' });
   };
 
   const saveProduct = async (event) => {
     event.preventDefault();
     setProducts((current) => current.map((product) => product.id === editingProduct.id ? { ...product, ...editForm, sellPrice: Number(editForm.sellPrice), costPrice: Number(editForm.costPrice || 0) } : product));
-    await adminSupabase.from('products').update({name:editForm.name,sell_price:Number(editForm.sellPrice),cost_price:Number(editForm.costPrice||0),image_url:editForm.image,category:editForm.category,source_link:editForm.link,description:editForm.description,updated_at:new Date().toISOString()}).eq(editingProduct.dbId ? 'id' : 'product_code', editingProduct.dbId || editingProduct.id);
+    await adminSupabase.from('products').update({name:editForm.name,sell_price:Number(editForm.sellPrice),cost_price:Number(editForm.costPrice||0),image_url:editForm.image,category:editForm.category,description:editForm.description,updated_at:new Date().toISOString()}).eq(editingProduct.dbId ? 'id' : 'product_code', editingProduct.dbId || editingProduct.id);
     setEditingProduct(null);
   };
 
@@ -67,7 +67,6 @@ export default function StoreShowcase() {
       costPrice,
       category: form.category,
       image: form.image || null,
-      link: form.link,
       description: form.description,
       onShelf: true,
     };
@@ -79,7 +78,6 @@ export default function StoreShowcase() {
       new_cost_price: newProduct.costPrice,
       new_category: newProduct.category,
       new_image_url: newProduct.image,
-      new_source_link: newProduct.link || null,
       new_description: newProduct.description || null,
     }).single();
     setAddingProduct(false);
@@ -202,7 +200,6 @@ export default function StoreShowcase() {
                 <label className="showcase-image-upload-button">{imageBusy ? 'Processing…' : 'Upload image'}<input type="file" accept="image/*" hidden disabled={imageBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; setProductImageFile(file); }} /></label>
               </div>
               <label>Category *<select required value={form.category} onChange={(e) => updateForm('category', e.target.value)}><option value="">— Select a category —</option>{categories.slice(1).map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label>Product / Source Link<input type="url" placeholder="https://..." value={form.link} onChange={(e) => updateForm('link', e.target.value)} /></label>
               <label>Description<textarea placeholder="Brief product description..." value={form.description} onChange={(e) => updateForm('description', e.target.value)} /></label>
             </div>
             <div className="showcase-modal-footer"><button type="button" onClick={() => setShowAddModal(false)}>Cancel</button><button type="submit" disabled={addingProduct || imageBusy}>{addingProduct ? 'Saving…' : 'Add Product'}</button></div>
@@ -220,7 +217,6 @@ export default function StoreShowcase() {
               <label>Cost Price (USD)<input min="0" step="0.01" type="number" value={editForm.costPrice} onChange={(e) => setEditForm((current) => ({ ...current, costPrice: e.target.value }))} /><small className="edit-profit">Profit: ${(Number(editForm.sellPrice || 0) - Number(editForm.costPrice || 0)).toFixed(2)}</small></label>
               <label>Product Image URL<input type="url" value={editForm.image} onChange={(e) => setEditForm((current) => ({ ...current, image: e.target.value }))} />{editForm.image && <img className="edit-image-preview" src={editForm.image} alt="Product preview" />}</label>
               <label>Category *<select required value={editForm.category} onChange={(e) => setEditForm((current) => ({ ...current, category: e.target.value }))}><option value="">— Select a category —</option>{categories.slice(1).map((item) => <option key={item}>{item}</option>)}</select>{editForm.category && <small className="edit-category-preview">◇ {editForm.category}</small>}</label>
-              <label>Product / Source Link<input type="text" value={editForm.link} onChange={(e) => setEditForm((current) => ({ ...current, link: e.target.value }))} /></label>
               <label>Description<textarea placeholder="Brief product description..." value={editForm.description} onChange={(e) => setEditForm((current) => ({ ...current, description: e.target.value }))} /></label>
             </div>
             <div className="showcase-modal-footer"><button type="button" onClick={() => setEditingProduct(null)}>Cancel</button><button type="submit">Save Changes</button></div>
