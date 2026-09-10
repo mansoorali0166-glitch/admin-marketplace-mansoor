@@ -4187,35 +4187,68 @@ const demoManagedOrders = [
   },
 ];
 
+const agentOrderStatuses = [
+  { value: "Pending Payment", label: "Pending Pay" },
+  { value: "Paid", label: "Paid" },
+  { value: "Pending Ship", label: "Pending Ship" },
+  { value: "Pending Receive", label: "Pending Receive" },
+  { value: "Completed", label: "Completed" },
+  { value: "Rejected", label: "Rejected" },
+  { value: "Cancelled", label: "Cancelled" },
+  { value: "Refund", label: "Refund" },
+];
+
+const agentOrderStatusAliases = {
+  "pending pay": "Pending Payment",
+  "pending payment": "Pending Payment",
+  paid: "Paid",
+  "pending ship": "Pending Ship",
+  "pending receive": "Pending Receive",
+  completed: "Completed",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  canceled: "Cancelled",
+  refund: "Refund",
+  refunded: "Refund",
+};
+
+const normalizeAgentOrderStatus = (status) =>
+  agentOrderStatusAliases[String(status || "").trim().toLowerCase()] ||
+  "Pending Payment";
+
 function useLiveAgentOrders() {
-  const [orders, setOrders] = useState(demoManagedOrders);
+  const [orders, setOrders] = useState([]);
   const load = React.useCallback(async () => {
-    const { data, error } = await agentSupabase
-      .from("orders")
-      .select(
-        "*,seller:profiles!orders_seller_id_profiles_fkey(display_name,email)",
-      )
-      .order("created_at", { ascending: false });
+    const { data, error } = await agentSupabase.from("orders").select("*").order("created_at", { ascending: false });
     if (error) console.log("ORDERS LOAD ERROR:", error);
-    if (!error && data)
+    if (!error && data) {
+      const sellerIds = [...new Set(data.map((row) => row.seller_id).filter(Boolean))];
+      const profileMap = new Map();
+      if (sellerIds.length) {
+        const { data: profiles } = await agentSupabase.from("profiles").select("id,display_name,email").in("id", sellerIds);
+        (profiles || []).forEach((profile) => profileMap.set(profile.id, profile));
+      }
       setOrders(
-        data.map((row) => ({
+        data.map((row) => {
+          const seller = profileMap.get(row.seller_id);
+          return {
           dbId: row.id,
-          id: row.order_no,
-          seller: row.seller?.display_name || row.seller?.email || "Seller",
+          id: row.order_no || row.id,
+          seller: seller?.display_name || seller?.email || row.seller_name || "Seller",
           sellerId: row.seller_id,
-          product: row.product_name,
+          product: row.product_name || "Product",
           customer: row.customer_name || "Customer",
           qty: Number(row.quantity || 1),
           sale: Number(row.sell_price || 0) * Number(row.quantity || 1),
           profit:
             (Number(row.sell_price || 0) - Number(row.cost_price || 0)) *
             Number(row.quantity || 1),
-          status: row.status,
-          date: new Date(row.created_at).toLocaleString(),
-        })),
+          status: normalizeAgentOrderStatus(row.status),
+          date: row.created_at ? new Date(row.created_at).toLocaleString() : "—",
+        };
+        }),
       );
-    // Temporary Code
+    }
   }, []);
   useEffect(() => {
     load();
@@ -4234,38 +4267,34 @@ function useLiveAgentOrders() {
 
 function AgentOrderManagement() {
   const [orders, setOrders, reloadOrders] = useLiveAgentOrders();
-  const [tab, setTab] = useState("Pending Receive");
+  const [tab, setTab] = useState("All");
   const [search, setSearch] = useState("");
-  const groups = {
-    "Pending Orders": ["Pending Ship"],
-    "Pending Receive": ["Pending Receive", "Shipped"],
-    "Completed Orders": ["Completed", "Refund", "Cancelled"],
-  };
-  const counts = Object.fromEntries(
-    Object.entries(groups).map(([label, statuses]) => [
-      label,
-      orders.filter((order) => statuses.includes(order.status)).length,
-    ]),
-  );
+  const [updatingId, setUpdatingId] = useState(null);
+  const [message, setMessage] = useState("");
+  const tabs = ["All", ...agentOrderStatuses.map(({ label }) => label)];
+  const selectedStatus = tab === "All" ? "All" : normalizeAgentOrderStatus(tab);
   const visible = orders.filter(
     (order) =>
-      groups[tab].includes(order.status) &&
+      (selectedStatus === "All" || order.status === selectedStatus) &&
       [order.id, order.product, order.seller, order.customer].some((value) =>
         String(value || "")
           .toLowerCase()
           .includes(search.toLowerCase()),
       ),
   );
-  const changeStatus = async (id, status) => {
-    const order = orders.find((item) => item.id === id);
+  const changeStatus = async (order, status) => {
+    const previousStatus = order.status;
+    setMessage("");
+    setUpdatingId(order.dbId);
     setOrders((current) =>
-      current.map((item) => (item.id === id ? { ...item, status } : item)),
+      current.map((item) => (item.dbId === order.dbId ? { ...item, status } : item)),
     );
-    if (order?.dbId)
-      await agentSupabase
-        .from("orders")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("id", order.dbId);
+    const { error } = await agentSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId);
+    if (error) {
+      setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status: previousStatus } : item));
+      setMessage(`Could not update order ${order.id}: ${error.message}`);
+    }
+    setUpdatingId(null);
   };
   return (
     <div className="agent-orders-page">
@@ -4277,10 +4306,10 @@ function AgentOrderManagement() {
             seller immediately.
           </p>
         </div>
-        <button type="button">↻ Refresh</button>
+        <button type="button" onClick={reloadOrders}>↻ Refresh</button>
       </header>
       <nav>
-        {Object.keys(groups).map((item) => (
+        {tabs.map((item) => (
           <button
             type="button"
             key={item}
@@ -4288,7 +4317,7 @@ function AgentOrderManagement() {
             onClick={() => setTab(item)}
           >
             {item}
-            <b>{counts[item]}</b>
+            <b>{item === "All" ? orders.length : orders.filter((order) => order.status === normalizeAgentOrderStatus(item)).length}</b>
           </button>
         ))}
       </nav>
@@ -4301,6 +4330,7 @@ function AgentOrderManagement() {
           onChange={(event) => setSearch(event.target.value)}
         />
       </label>
+      {message && <p className="agent-orders-error" role="alert">{message}</p>}
       <section className="agent-orders-table">
         <div className="agent-orders-head">
           <span>ORDER NO.</span>
@@ -4329,10 +4359,11 @@ function AgentOrderManagement() {
                 .toLowerCase()
                 .replace(" ", "-")}`}
               value={order.status || ""}
-              onChange={(event) => changeStatus(order.id, event.target.value)}
+              disabled={updatingId === order.dbId}
+              onChange={(event) => changeStatus(order, event.target.value)}
             >
-              {groups[tab].map((status) => (
-                <option key={status}>{status}</option>
+              {agentOrderStatuses.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
             <time>{order.date}</time>
