@@ -4768,71 +4768,8 @@ function AgentBoundAddresses() {
   );
 }
 
-const demoShowcaseProducts = [
-  {
-    id: "demo-1",
-    product_code: "CR149325",
-    sku: "P1786188066270",
-    name: "Business Laptop Bag",
-    sell_price: 196,
-    cost_price: 156.8,
-    category: "Accessories",
-    image_url:
-      "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=700&q=80",
-    admin_on_shelf: false,
-  },
-  {
-    id: "demo-2",
-    product_code: "CR179298",
-    sku: "P1786125720721",
-    name: "Pink Kids Backpack",
-    sell_price: 200.1,
-    cost_price: 160.08,
-    category: "Other",
-    image_url:
-      "https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=700&q=80",
-    admin_on_shelf: true,
-  },
-  {
-    id: "demo-3",
-    product_code: "CR149071",
-    sku: "P1786125640584",
-    name: "Hard Shell Backpack",
-    sell_price: 199.99,
-    cost_price: 159.99,
-    category: "Other",
-    image_url:
-      "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=700&q=80",
-    admin_on_shelf: true,
-  },
-  {
-    id: "demo-4",
-    product_code: "CR149326",
-    sku: "P1786125560199",
-    name: "Slim Travel Backpack",
-    sell_price: 196,
-    cost_price: 156.8,
-    category: "Accessories",
-    image_url:
-      "https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=700&q=80",
-    admin_on_shelf: true,
-  },
-  {
-    id: "demo-5",
-    product_code: "CR149083",
-    sku: "P1786125481774",
-    name: "Executive Travel Bag",
-    sell_price: 186.39,
-    cost_price: 149.11,
-    category: "Men",
-    image_url:
-      "https://images.unsplash.com/photo-1622560480654-d96214fdc887?auto=format&fit=crop&w=700&q=80",
-    admin_on_shelf: true,
-  },
-];
-
 function AgentShowcase() {
-  const [products, setProducts] = useState(demoShowcaseProducts);
+  const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -4863,7 +4800,7 @@ function AgentShowcase() {
         .from("products")
         .select("*")
         .order("created_at", { ascending: false });
-      if (mounted && !error && data?.length) setProducts(data);
+      if (mounted && !error) setProducts(data || []);
       if (mounted) setLoading(false);
     };
     initialLoad();

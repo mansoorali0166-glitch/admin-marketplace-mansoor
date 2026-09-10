@@ -1,22 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { starterProducts } from '../admin/StoreShowcase';
 import './SellerShowcase.css';
 import { sellerSupabase } from '../shared/supabase';
 
 const categories = ['All', 'Accessories', 'Baby', 'Beauty', 'Electronics', 'Home & Garden', 'Kids', 'Men', 'Other', 'Sports', 'Women'];
-const getCatalog = () => {
-  try { return JSON.parse(localStorage.getItem('admin_product_catalog')) || starterProducts; } catch { return starterProducts; }
-};
-const getSelections = (catalog) => {
+const getSelections = () => {
   try {
     const saved = JSON.parse(localStorage.getItem('seller_showcase_products'));
-    return saved || catalog.slice(0, 2).map((product) => ({ id: product.id, onShelf: true }));
-  } catch { return catalog.slice(0, 2).map((product) => ({ id: product.id, onShelf: true })); }
+    return saved || [];
+  } catch { return []; }
 };
 
 export default function SellerShowcase({ onBack, shopLocked = false, client = sellerSupabase, sellerId }) {
-  const [catalog, setCatalog] = useState(getCatalog);
-  const [selections, setSelections] = useState(() => getSelections(getCatalog()));
+  const [catalog, setCatalog] = useState([]);
+  const [selections, setSelections] = useState(getSelections);
   const [category, setCategory] = useState('All');
   const [shelf, setShelf] = useState('On Shelf');
   const [adding, setAdding] = useState(false);
@@ -26,12 +22,10 @@ export default function SellerShowcase({ onBack, shopLocked = false, client = se
     const loadCloudShowcase = async () => {
       const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
       const { data: products } = await client.from('products').select('*').order('created_at', { ascending:false });
-      if (products?.length) {
-        const mapped = products.map((item) => ({dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,onShelf:item.admin_on_shelf}));
-        setCatalog(mapped);
-        const { data: selected } = await client.from('showcase_products').select('product_id,on_shelf').eq('seller_id', auth.user.id);
-        if (selected?.length) setSelections(selected.map((item) => ({id:mapped.find((product) => product.dbId === item.product_id)?.id,onShelf:item.on_shelf})).filter((item) => item.id));
-      }
+      const mapped = (products || []).map((item) => ({dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,onShelf:item.admin_on_shelf}));
+      setCatalog(mapped);
+      const { data: selected } = await client.from('showcase_products').select('product_id,on_shelf').eq('seller_id', auth.user.id);
+      setSelections((selected || []).map((item) => ({id:mapped.find((product) => product.dbId === item.product_id)?.id,onShelf:item.on_shelf})).filter((item) => item.id));
     };
     loadCloudShowcase();
     const channel = client.channel(`seller-live-showcase-${sellerId || 'self'}`).on('postgres_changes',{event:'*',schema:'public',table:'products'},loadCloudShowcase).on('postgres_changes',{event:'*',schema:'public',table:'showcase_products'},loadCloudShowcase).subscribe();
@@ -61,7 +55,6 @@ export default function SellerShowcase({ onBack, shopLocked = false, client = se
     const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
     await client.from('showcase_products').update({on_shelf:onShelf}).eq('seller_id',auth.user.id).eq('product_id',product.dbId);
   };
-  const refreshCatalog = () => setCatalog(getCatalog());
 
   if (adding) return <main className="seller-showcase-page"><div className="seller-showcase-shell add-products-shell">
     <header><button type="button" onClick={() => { setAdding(false); setCategory('All'); }}>×</button><h1>Add Products</h1><span /></header>
@@ -71,7 +64,7 @@ export default function SellerShowcase({ onBack, shopLocked = false, client = se
   </div></main>;
 
   return <main className="seller-showcase-page"><div className="seller-showcase-shell">
-    <header><button type="button" onClick={onBack}>‹</button><h1>Showcase</h1>{!shopLocked && <button className="seller-add-products" type="button" onClick={() => { refreshCatalog(); setAdding(true); }}>＋ Add Products</button>}</header>
+    <header><button type="button" onClick={onBack}>‹</button><h1>Showcase</h1>{!shopLocked && <button className="seller-add-products" type="button" onClick={() => setAdding(true)}>＋ Add Products</button>}</header>
     {notice && <div className="seller-showcase-notice">{notice}</div>}
     {shopLocked ? (
       <div className="seller-showcase-empty">Your shop is locked. Products are hidden until it's unlocked.</div>

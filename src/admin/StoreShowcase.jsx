@@ -4,20 +4,10 @@ import { adminSupabase } from '../shared/supabase';
 
 const categories = ['All', 'Accessories', 'Baby', 'Beauty', 'Electronics', 'Home & Garden', 'Kids', 'Men', 'Other', 'Sports', 'Women'];
 
-export const starterProducts = [
-  { id: 'CR149325', sku: 'P1786188066270', name: 'Business Laptop Bag', sellPrice: 196, costPrice: 156.8, category: 'Accessories', image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=700&q=80', onShelf: false },
-  { id: 'CR179298', sku: 'P1786125720721', name: 'Pink Kids Backpack', sellPrice: 200.1, costPrice: 160.08, category: 'Other', image: 'https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=700&q=80', onShelf: true },
-  { id: 'CR149071', sku: 'P1786125640584', name: 'Hard Shell Backpack', sellPrice: 199.99, costPrice: 159.99, category: 'Other', image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=700&q=80', onShelf: true },
-  { id: 'CR149326', sku: 'P1786125560199', name: 'Slim Travel Backpack', sellPrice: 196, costPrice: 156.8, category: 'Accessories', image: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=700&q=80', onShelf: true },
-  { id: 'CR149083', sku: 'P1786125481774', name: 'Executive Travel Bag', sellPrice: 186.39, costPrice: 149.11, category: 'Men', image: 'https://images.unsplash.com/photo-1622560480654-d96214fdc887?auto=format&fit=crop&w=700&q=80', onShelf: true },
-];
-
 const emptyForm = { name: '', sellPrice: '', costPrice: '', image: '', category: '', link: '', description: '' };
 
 export default function StoreShowcase() {
-  const [products, setProducts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('admin_product_catalog')) || starterProducts; } catch { return starterProducts; }
-  });
+  const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -27,16 +17,8 @@ export default function StoreShowcase() {
   const [editForm, setEditForm] = useState(emptyForm);
 
   useEffect(() => {
-    localStorage.setItem('admin_product_catalog', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    adminSupabase.from('products').select('*').order('created_at', { ascending: false }).then(async ({ data }) => {
-      if (!data?.length) {
-        const { data: seeded } = await adminSupabase.from('products').insert(starterProducts.map((item) => ({product_code:item.id,sku:item.sku,name:item.name,sell_price:item.sellPrice,cost_price:item.costPrice,category:item.category,image_url:item.image,admin_on_shelf:item.onShelf}))).select();
-        data = seeded || [];
-      }
-      if (data.length) setProducts(data.map((item) => ({ dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,link:item.source_link,description:item.description,onShelf:item.admin_on_shelf })));
+    adminSupabase.from('products').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      setProducts((data || []).map((item) => ({ dbId:item.id,id:item.product_code,sku:item.sku,name:item.name,sellPrice:Number(item.sell_price),costPrice:Number(item.cost_price),category:item.category,image:item.image_url,link:item.source_link,description:item.description,onShelf:item.admin_on_shelf })));
     });
   }, []);
 
