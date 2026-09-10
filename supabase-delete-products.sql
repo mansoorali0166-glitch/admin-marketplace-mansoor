@@ -1,6 +1,30 @@
 -- Run once in Supabase Dashboard > SQL Editor.
 -- Allows only an authenticated admin to permanently delete a product.
 
+-- Bring older products tables up to the complete schema used by all portals.
+-- These statements preserve existing rows and safely skip columns already present.
+alter table public.products add column if not exists product_code text;
+alter table public.products add column if not exists sku text;
+alter table public.products add column if not exists name text;
+alter table public.products add column if not exists sell_price numeric(12,2) default 0;
+alter table public.products add column if not exists cost_price numeric(12,2) default 0;
+alter table public.products add column if not exists category text default 'Other';
+alter table public.products add column if not exists image_url text;
+alter table public.products add column if not exists description text;
+alter table public.products add column if not exists admin_on_shelf boolean default true;
+alter table public.products add column if not exists created_at timestamptz default now();
+alter table public.products add column if not exists updated_at timestamptz default now();
+
+update public.products set product_code = 'CR' || id::text where product_code is null;
+update public.products set sku = 'P' || id::text where sku is null;
+update public.products set name = coalesce(nullif(name, ''), product_code, 'Product') where name is null or name = '';
+update public.products set sell_price = 0 where sell_price is null;
+update public.products set cost_price = 0 where cost_price is null;
+update public.products set category = 'Other' where category is null or category = '';
+update public.products set admin_on_shelf = true where admin_on_shelf is null;
+update public.products set created_at = now() where created_at is null;
+update public.products set updated_at = now() where updated_at is null;
+
 create or replace function public.admin_delete_product_permanently(target_product_id text)
 returns boolean
 language plpgsql

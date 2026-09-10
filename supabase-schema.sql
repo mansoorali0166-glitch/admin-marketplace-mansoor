@@ -43,7 +43,7 @@ $$;
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(), product_code text unique not null, sku text unique not null,
   name text not null, sell_price numeric(12,2) not null default 0, cost_price numeric(12,2) not null default 0,
-  category text not null default 'Other', image_url text, source_link text, description text,
+  category text not null default 'Other', image_url text, description text,
   admin_on_shelf boolean not null default true, created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 create table if not exists public.showcase_products (
