@@ -2,12 +2,8 @@ import React, { useEffect, useState } from "react";
 import "./AllAgents.css";
 import { adminSupabase } from "../shared/supabase";
 
-export default function AllAgents({
-  openCreateAgent = false,
-  onNavigateToChat,
-  onNavigateToMerchants,
-}) {
-  const [showNewAgentModal, setShowNewAgentModal] = useState(openCreateAgent);
+export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
+  const [showNewAgentModal, setShowNewAgentModal] = useState(false);
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -196,7 +192,7 @@ export default function AllAgents({
             onClick={() => setShowNewAgentModal(true)}
             type="button"
           >
-            <span>♙</span> New Agent
+            <span>♙</span> Add Agent
           </button>
         </div>
       </div>
@@ -348,9 +344,23 @@ export default function AllAgents({
 
       {/* CREATE AGENT MODAL */}
       {showNewAgentModal && (
-        <div className="new-agent-modal">
+        <div
+          className="new-agent-modal-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowNewAgentModal(false);
+            }
+          }}
+        >
+        <div
+          className="new-agent-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-agent-title"
+        >
           <div className="new-agent-modal-header">
-            <h3>Create New Agent</h3>
+            <h3 id="new-agent-title">Create New Agent</h3>
             <button
               className="new-agent-modal-close"
               type="button"
@@ -486,6 +496,7 @@ export default function AllAgents({
               </button>
             </div>
           </form>
+        </div>
         </div>
       )}
     </div>

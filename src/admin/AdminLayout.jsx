@@ -50,7 +50,6 @@ export default function AdminLayout({ onLogout }) {
 
   const agentsActive = [
     'All Agents',
-    'Add Agent',
     'Active Agents',
     'Suspended Agents',
     'Agent Invitation Codes',
@@ -170,18 +169,6 @@ export default function AdminLayout({ onLogout }) {
                   onClick={() => handleTabClick('All Agents')}
                 >
                   All Agents
-                </div>
-
-
-                <div
-                  className={`submenu-item ${
-                    activeTab === 'Add Agent'
-                      ? 'active-sub'
-                      : ''
-                  }`}
-                  onClick={() => handleTabClick('Add Agent')}
-                >
-                  Add Agent
                 </div>
 
 
@@ -518,8 +505,6 @@ export default function AdminLayout({ onLogout }) {
           {activeTab === 'Merchants' && <Merchants />}
 
           {activeTab === 'All Agents' && <AllAgents />}
-
-          {activeTab === 'Add Agent' && <AllAgents openCreateAgent />}
 
           {activeTab === 'Active Agents' && <ActiveAgents />}
 
