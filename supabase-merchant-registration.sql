@@ -34,6 +34,27 @@ create table if not exists public.merchant_applications (
   decided_at timestamptz
 );
 
+create or replace function public.sync_merchant_approval_gate()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  update public.profiles
+  set registration_status=new.status,
+      allow_login=(new.status='Approved')
+  where id=new.seller_id and role='seller';
+  return new;
+end; $$;
+
+drop trigger if exists merchant_application_approval_gate on public.merchant_applications;
+create trigger merchant_application_approval_gate
+after insert or update of status on public.merchant_applications
+for each row execute function public.sync_merchant_approval_gate();
+
+update public.profiles profiles
+set registration_status=applications.status,
+    allow_login=(applications.status='Approved')
+from public.merchant_applications applications
+where profiles.id=applications.seller_id and profiles.role='seller';
+
 alter table public.merchant_applications add column if not exists phone text not null default '';
 
 alter table public.merchant_applications enable row level security;
@@ -102,8 +123,8 @@ begin
     'seller',selected_agent,coalesce(selected_user.raw_user_meta_data->>'address',''),
     coalesce(selected_user.raw_user_meta_data->>'phone',''),false,'Pending')
   on conflict (id) do update set agent_id=excluded.agent_id,address=excluded.address,phone=excluded.phone,
-    allow_login=public.profiles.allow_login,
-    registration_status=public.profiles.registration_status;
+    allow_login=false,
+    registration_status='Pending';
 
   insert into public.merchant_applications (seller_id,agent_id,name,email,address,phone,status,created_at,decided_at)
   values (selected_user.id,selected_agent,
@@ -112,9 +133,9 @@ begin
     coalesce(selected_user.raw_user_meta_data->>'phone',''),'Pending',now(),null)
   on conflict (seller_id) do update set
     agent_id=excluded.agent_id,name=excluded.name,email=excluded.email,address=excluded.address,phone=excluded.phone,
-    status=public.merchant_applications.status,
-    created_at=public.merchant_applications.created_at,
-    decided_at=public.merchant_applications.decided_at
+    status='Pending',
+    created_at=now(),
+    decided_at=null
   returning id into application_id;
   return application_id;
 end; $$;

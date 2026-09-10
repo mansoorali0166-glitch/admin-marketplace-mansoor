@@ -25,8 +25,23 @@ export default function App() {
       return;
     }
     const client = isSellerPortal ? sellerSupabase : isAgentPortal ? agentSupabase : adminSupabase;
+    const validateSellerSession = async (session) => {
+      if (!session) return false;
+      const [{ data: profile }, { data: application }] = await Promise.all([
+        sellerSupabase.from('profiles').select('role,allow_login,registration_status').eq('id', session.user.id).maybeSingle(),
+        sellerSupabase.from('merchant_applications').select('status').eq('seller_id', session.user.id).maybeSingle(),
+      ]);
+      const canAccess = profile?.role === 'seller'
+        && profile.allow_login !== false
+        && profile.registration_status !== 'Pending'
+        && profile.registration_status !== 'Rejected'
+        && application?.status !== 'Pending'
+        && application?.status !== 'Rejected';
+      if (!canAccess) await sellerSupabase.auth.signOut();
+      return canAccess;
+    };
     client.auth.getSession().then(async ({ data }) => {
-      if (isSellerPortal) setIsSellerLoggedIn(Boolean(data.session));
+      if (isSellerPortal) setIsSellerLoggedIn(await validateSellerSession(data.session));
       else if (isAgentPortal && data.session) {
         const { data: profile } = await agentSupabase.from('profiles').select('role,status,allow_login').eq('id', data.session.user.id).maybeSingle();
         const canAccess = profile?.role === 'agent' && profile.allow_login !== false && profile.status?.toLowerCase() !== 'suspended';
@@ -37,7 +52,12 @@ export default function App() {
       setAuthLoading(false);
     });
     const { data: listener } = client.auth.onAuthStateChange((event, session) => {
-      if (isSellerPortal) setIsSellerLoggedIn(Boolean(session));
+      if (isSellerPortal) {
+        if (event === 'SIGNED_OUT' || !session) setIsSellerLoggedIn(false);
+        else if (!window.location.pathname.toLowerCase().includes('/register')) {
+          validateSellerSession(session).then(setIsSellerLoggedIn);
+        }
+      }
       else if (isAgentPortal && event === 'SIGNED_OUT') setIsAgentLoggedIn(false);
       else setIsAdminLoggedIn(Boolean(session));
     });

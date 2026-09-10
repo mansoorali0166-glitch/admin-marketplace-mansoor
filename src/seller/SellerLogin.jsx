@@ -24,9 +24,18 @@ export default function SellerLogin({ onLoginSuccess }) {
     setSubmitting(true); setError(''); setNotice('');
     const { data, error: authError } = await sellerSupabase.auth.signInWithPassword({ email, password });
     if (authError) { setError(authError.message); setSubmitting(false); return; }
-    const { data: profile } = await sellerSupabase.from('profiles').select('role,allow_login,registration_status').eq('id', data.user.id).single();
-    if (!['seller', 'agent'].includes(profile?.role)) { await sellerSupabase.auth.signOut(); setError('This account does not have seller access.'); setSubmitting(false); return; }
-    if (profile?.allow_login === false) { await sellerSupabase.auth.signOut(); setError(profile?.registration_status === 'Rejected' ? 'Your merchant registration was denied. Contact your agent for help.' : 'Your registration is awaiting agent approval or this account is locked.'); setSubmitting(false); return; }
+    const [{ data: profile }, { data: application }] = await Promise.all([
+      sellerSupabase.from('profiles').select('role,allow_login,registration_status').eq('id', data.user.id).maybeSingle(),
+      sellerSupabase.from('merchant_applications').select('status').eq('seller_id', data.user.id).maybeSingle(),
+    ]);
+    if (profile?.role !== 'seller') { await sellerSupabase.auth.signOut(); setError('This account does not have seller access.'); setSubmitting(false); return; }
+    const approvalStatus = application?.status || profile?.registration_status;
+    if (profile.allow_login === false || approvalStatus === 'Pending' || approvalStatus === 'Rejected') {
+      await sellerSupabase.auth.signOut();
+      setError(approvalStatus === 'Rejected' ? 'Your merchant registration was denied. Contact your agent for help.' : 'Your registration is awaiting agent approval.');
+      setSubmitting(false);
+      return;
+    }
     if (profile?.registration_status === 'Approved' && !sessionStorage.getItem(`merchant-approved-${data.user.id}`)) {
       sessionStorage.setItem(`merchant-approved-${data.user.id}`, 'seen');
       window.alert('Your account is successfully registered.');
