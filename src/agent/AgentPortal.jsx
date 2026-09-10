@@ -186,6 +186,11 @@ export default function AgentPortal({ onLogout }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState("");
   const avatarInputRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [changeFormOpen, setChangeFormOpen] = useState(false);
+  const [profileRequest, setProfileRequest] = useState({ display_name: "", company_name: "", phone: "" });
+  const [requestNotice, setRequestNotice] = useState("");
+  const [requestBusy, setRequestBusy] = useState(false);
   const [inviteCode, setPortalInviteCode] = useState("");
   const [inviteCodeEnabled, setInviteCodeEnabled] = useState(true);
   const inviteLink = inviteCodeEnabled && inviteCode
@@ -199,11 +204,12 @@ export default function AgentPortal({ onLogout }) {
       if (!mounted) return;
       if (data?.user) {
         const { data: profile } = await agentSupabase.from("profiles")
-          .select("id,display_name,email,avatar_url,invitation_code,invitation_code_enabled")
+          .select("id,display_name,email,phone,company_name,avatar_url,invitation_code,invitation_code_enabled")
           .eq("id", data.user.id).maybeSingle();
         if (mounted) {
           const resolvedProfile = profile || { id: data.user.id, display_name: data.user.user_metadata?.display_name || data.user.email?.split("@")[0], email: data.user.email };
           setAgentProfile(resolvedProfile);
+          setProfileRequest({ display_name: resolvedProfile.display_name || "", company_name: resolvedProfile.company_name || "", phone: resolvedProfile.phone || "" });
           setAgentAvatar(profile?.avatar_url || data.user.user_metadata?.avatar_url || "");
           setPortalInviteCode(profile?.invitation_code || "");
           setInviteCodeEnabled(profile?.invitation_code_enabled !== false);
@@ -242,6 +248,32 @@ export default function AgentPortal({ onLogout }) {
       setAvatarError(error.message || "Could not update your profile photo.");
     } finally {
       setAvatarBusy(false);
+    }
+  };
+
+  const submitProfileRequest = async (event) => {
+    event.preventDefault();
+    setRequestBusy(true);
+    setRequestNotice("");
+    try {
+      const { data } = await agentSupabase.auth.getUser();
+      if (!data?.user) throw new Error("Your session has expired. Please sign in again.");
+      const payload = {
+        agent_id: data.user.id,
+        requested_display_name: profileRequest.display_name.trim(),
+        requested_company_name: profileRequest.company_name.trim() || null,
+        requested_phone: profileRequest.phone.trim() || null,
+        status: "pending",
+      };
+      if (!payload.requested_display_name) throw new Error("Name is required.");
+      const { error } = await agentSupabase.from("agent_profile_change_requests").insert(payload);
+      if (error) throw error;
+      setRequestNotice("Your request was sent to the admin for approval.");
+      setChangeFormOpen(false);
+    } catch (error) {
+      setRequestNotice(error.message || "Could not send the request.");
+    } finally {
+      setRequestBusy(false);
     }
   };
 
@@ -300,7 +332,7 @@ export default function AgentPortal({ onLogout }) {
         <header className="agent-topbar">
           <span>Agent Control Panel</span>
           <div className="agent-topbar-profile">
-            <button className="agent-topbar-profile-button" type="button" title="Change profile photo" aria-label="Change profile photo" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+            <button className="agent-topbar-profile-button" type="button" title="View profile" aria-label="View profile" onClick={() => setProfileOpen(true)}>
             {agentAvatar ? (
               <img className="agent-topbar-avatar" src={agentAvatar} alt="" />
             ) : (
@@ -308,7 +340,6 @@ export default function AgentPortal({ onLogout }) {
             )}
             <span>{avatarBusy ? "Uploading…" : agentName}</span>
             </button>
-            <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={uploadAgentAvatar} />
             {avatarError && <small className="agent-topbar-profile-error">{avatarError}</small>}
           </div>
         </header>
@@ -388,6 +419,35 @@ export default function AgentPortal({ onLogout }) {
           </section>
         )}
       </section>
+      {profileOpen && (
+        <div className="agent-profile-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && setProfileOpen(false)}>
+          <section className="agent-profile-modal" role="dialog" aria-modal="true" aria-labelledby="agent-profile-title">
+            <header><div><h2 id="agent-profile-title">My Profile</h2><p>Your current approved information</p></div><button type="button" onClick={() => setProfileOpen(false)}>×</button></header>
+            <div className="agent-profile-photo-block">
+              {agentAvatar ? <img src={agentAvatar} alt="Agent profile" /> : <b>{agentInitial}</b>}
+              <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>{avatarBusy ? "Uploading…" : "Change photo"}</button>
+              <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={uploadAgentAvatar} />
+            </div>
+            {avatarError && <p className="agent-profile-modal-notice error">{avatarError}</p>}
+            <dl className="agent-profile-info">
+              <div><dt>Name</dt><dd>{agentName}</dd></div>
+              <div><dt>Email</dt><dd>{agentProfile?.email || "—"}</dd></div>
+              <div><dt>Company</dt><dd>{agentProfile?.company_name || "—"}</dd></div>
+              <div><dt>Phone</dt><dd>{agentProfile?.phone || "—"}</dd></div>
+              <div><dt>Agent ID</dt><dd>{agentProfile?.id ? `AGT${agentProfile.id.slice(0, 8).toUpperCase()}` : "—"}</dd></div>
+            </dl>
+            {requestNotice && <p className="agent-profile-modal-notice">{requestNotice}</p>}
+            {!changeFormOpen ? <button className="agent-profile-request-button" type="button" onClick={() => setChangeFormOpen(true)}>Request profile information change</button> : (
+              <form className="agent-profile-request-form" onSubmit={submitProfileRequest}>
+                <label>Full name<input required value={profileRequest.display_name} onChange={(e) => setProfileRequest({ ...profileRequest, display_name: e.target.value })} /></label>
+                <label>Company<input value={profileRequest.company_name} onChange={(e) => setProfileRequest({ ...profileRequest, company_name: e.target.value })} /></label>
+                <label>Phone<input value={profileRequest.phone} onChange={(e) => setProfileRequest({ ...profileRequest, phone: e.target.value })} /></label>
+                <div><button type="button" onClick={() => setChangeFormOpen(false)}>Cancel</button><button type="submit" disabled={requestBusy}>{requestBusy ? "Sending…" : "Send request"}</button></div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   );
 }

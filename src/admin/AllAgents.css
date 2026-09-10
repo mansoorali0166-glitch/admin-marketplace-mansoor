@@ -92,6 +92,9 @@
   cursor: pointer;
 }
 
+.profile-request-review{padding:7px 10px;border:1px solid #f59e0b;border-radius:8px;background:#fff7ed;color:#c2410c;font-weight:700;white-space:nowrap;cursor:pointer}.profile-request-none{color:#94a3b8}
+.profile-request-overlay{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.55)}.profile-request-modal{width:min(610px,100%);padding:24px;border-radius:17px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.3)}.profile-request-modal>header{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding-bottom:15px}.profile-request-modal h3{margin:0;font-size:21px}.profile-request-modal header p{margin:5px 0 0;color:#94a3b8}.profile-request-modal header button{border:0;background:transparent;color:#94a3b8;font-size:27px;cursor:pointer}.profile-request-comparison{margin-top:18px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}.profile-request-comparison>div{display:grid;grid-template-columns:100px 1fr 1fr;gap:12px;padding:11px 13px;border-bottom:1px solid #eef2f7}.profile-request-comparison>div:last-child{border:0}.profile-request-comparison>div:first-child{background:#f8fafc;color:#64748b;font-size:11px}.profile-request-comparison span{color:#64748b}.profile-request-comparison p{margin:0;color:#0f172a}.profile-request-error{padding:10px;border-radius:8px;background:#fff1f2;color:#be123c}.profile-request-modal footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.profile-request-modal footer button{padding:10px 17px;border:1px solid #fecaca;border-radius:8px;background:#fff;color:#dc2626;font-weight:700;cursor:pointer}.profile-request-modal footer button:last-child{border-color:#2563eb;background:#2563eb;color:#fff}
+
 
 /* =========================================================
    STAT CARDS

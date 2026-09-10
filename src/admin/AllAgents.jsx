@@ -11,6 +11,10 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [managedAgent, setManagedAgent] = useState(null);
+  const [profileRequests, setProfileRequests] = useState({});
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   const [newAgent, setNewAgent] = useState({
     fullName: "",
@@ -44,6 +48,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
               dbId: p.id,
               name: p.display_name || p.full_name || p.email || "Agent",
               email: p.email,
+              phone: p.phone || "—",
               company: p.company_name || "—",
               invitationCode: p.invitation_code || "••••••••",
               status: p.status || "Active",
@@ -59,10 +64,36 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
             })),
         );
       }
+      const { data: requests, error: requestError } = await adminSupabase
+        .from("agent_profile_change_requests")
+        .select("*")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      if (requestError && requestError.code !== "42P01") throw requestError;
+      setProfileRequests(Object.fromEntries((requests || []).map((request) => [request.agent_id, request])));
     } catch (err) {
       console.error("Error loading agents:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const reviewProfileRequest = async (decision) => {
+    if (!selectedRequest) return;
+    setReviewBusy(true);
+    setReviewError("");
+    try {
+      const { error } = await adminSupabase.rpc("review_agent_profile_change", {
+        request_id: selectedRequest.id,
+        decision,
+      });
+      if (error) throw error;
+      setSelectedRequest(null);
+      await loadAgents();
+    } catch (err) {
+      setReviewError(err.message || "Could not review this request.");
+    } finally {
+      setReviewBusy(false);
     }
   };
 
@@ -250,6 +281,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
               <th>COMMISSION</th>
               <th>WALLET</th>
               <th>LAST LOGIN</th>
+              <th>PROFILE REQUEST</th>
               <th>ACTIONS</th>
             </tr>
           </thead>
@@ -257,7 +289,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
             {loading ? (
               <tr>
                 <td
-                  colSpan="10"
+                  colSpan="11"
                   style={{ textAlign: "center", padding: "2rem" }}
                 >
                   Loading agents from database...
@@ -299,6 +331,11 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
                   <td>{agent.wallet}</td>
                   <td className="last-login">{agent.lastLogin}</td>
                   <td>
+                    {profileRequests[agent.dbId] ? (
+                      <button className="profile-request-review" type="button" onClick={() => { setReviewError(""); setSelectedRequest({ ...profileRequests[agent.dbId], agent }); }}>Review request</button>
+                    ) : <span className="profile-request-none">—</span>}
+                  </td>
+                  <td>
                     <div className="agent-actions">
                       <button
                         className="agent-action manage"
@@ -337,7 +374,7 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
             {!loading && filteredAgents.length === 0 && (
               <tr>
                 <td
-                  colSpan="10"
+                  colSpan="11"
                   style={{ textAlign: "center", padding: "2rem" }}
                 >
                   No agents found in database.
@@ -347,6 +384,22 @@ export default function AllAgents({ onNavigateToChat, onNavigateToMerchants }) {
           </tbody>
         </table>
       </div>
+
+      {selectedRequest && (
+        <div className="profile-request-overlay" onMouseDown={(event) => event.target === event.currentTarget && setSelectedRequest(null)}>
+          <section className="profile-request-modal" role="dialog" aria-modal="true">
+            <header><div><h3>Profile change request</h3><p>{selectedRequest.agent.name} · {selectedRequest.agent.email}</p></div><button type="button" onClick={() => setSelectedRequest(null)}>×</button></header>
+            <div className="profile-request-comparison">
+              <div><span>FIELD</span><strong>CURRENT</strong><strong>REQUESTED</strong></div>
+              <div><span>Name</span><p>{selectedRequest.agent.name}</p><p>{selectedRequest.requested_display_name || "—"}</p></div>
+              <div><span>Company</span><p>{selectedRequest.agent.company}</p><p>{selectedRequest.requested_company_name || "—"}</p></div>
+              <div><span>Phone</span><p>{selectedRequest.agent.phone}</p><p>{selectedRequest.requested_phone || "—"}</p></div>
+            </div>
+            {reviewError && <p className="profile-request-error">{reviewError}</p>}
+            <footer><button type="button" disabled={reviewBusy} onClick={() => reviewProfileRequest("denied")}>Deny</button><button type="button" disabled={reviewBusy} onClick={() => reviewProfileRequest("approved")}>{reviewBusy ? "Saving…" : "Approve changes"}</button></footer>
+          </section>
+        </div>
+      )}
 
       {/* CREATE AGENT MODAL */}
       {showNewAgentModal && (
