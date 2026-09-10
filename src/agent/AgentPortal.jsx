@@ -1180,25 +1180,33 @@ function AgentSellerChat() {
       .eq("channel", "agent")
       .order("created_at", { ascending: false });
     if (error) console.log("AGENT HISTORY LOAD ERROR:", error);
-    console.log("AGENT AUTH UID:", auth.user.id);
-    console.log("ROWS RETURNED:", data?.length, data);
+    const partnerIds = [...new Set((data || []).map((item) => item.sender_id === auth.user.id ? item.recipient_id : item.sender_id).filter(Boolean))];
+    const { data: partnerProfiles } = partnerIds.length
+      ? await agentSupabase.from("profiles").select("id,display_name,email,role").in("id", partnerIds)
+      : { data: [] };
+    const profileById = new Map((partnerProfiles || []).map((profile) => [profile.id, profile]));
     setHistory(
-      (data || []).map((item) => ({
-        id: item.id,
-        sellerId:
-          item.sender_id === auth.user.id ? item.recipient_id : item.sender_id,
-        mine: item.sender_id === auth.user.id,
-        text: item.body,
-        product: item.product,
-        productId: item.product?.id || item.product_id || null,
-        date: new Date(item.created_at).toLocaleString("en-US", {
+      (data || []).map((item) => {
+        const partnerId = item.sender_id === auth.user.id ? item.recipient_id : item.sender_id;
+        const partner = profileById.get(partnerId);
+        return {
+          id: item.id,
+          sellerId: partnerId,
+          partnerName: partner?.role === "admin" ? "Super Admin" : partner?.display_name || partner?.email || "Seller",
+          partnerRole: partner?.role || "seller",
+          mine: item.sender_id === auth.user.id,
+          text: item.body,
+          product: item.product,
+          productId: item.product?.id || item.product_id || null,
+          date: new Date(item.created_at).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
           hour: "numeric",
           minute: "2-digit",
         }),
-      })),
+        };
+      }),
     );
   };
 
@@ -1359,8 +1367,8 @@ function AgentSellerChat() {
             <div>
               <strong>
                 {item.mine
-                  ? `To: ${sellerName(item.sellerId)}`
-                  : `From: ${sellerName(item.sellerId)}`}
+                  ? `To: ${item.partnerName}`
+                  : `From: ${item.partnerName}`}
               </strong>
               {item.product && (
                 <span className="agent-chat-product-tag">
@@ -1380,6 +1388,8 @@ function AgentSellerChat() {
                 onClick={() =>
                   setThread({
                     sellerId: item.sellerId,
+                    partnerName: item.partnerName,
+                    partnerRole: item.partnerRole,
                     productId: item.productId,
                     product: item.product,
                   })
@@ -1404,7 +1414,7 @@ function AgentSellerChat() {
           <section>
             <header>
               <div>
-                <h3>{sellerName(thread.sellerId)}</h3>
+                <h3>{thread.partnerName || sellerName(thread.sellerId)}</h3>
                 <p>
                   {thread.product
                     ? `${thread.product.name || thread.product.product_code} · $${Number(thread.product.sell_price || 0).toFixed(2)}`
@@ -1428,7 +1438,7 @@ function AgentSellerChat() {
                 .map((item) => (
                   <article
                     key={item.id}
-                    className={item.mine ? "mine" : "seller"}
+                    className={item.mine ? "mine" : item.partnerRole === "admin" ? "admin" : "seller"}
                   >
                     {item.product && (
                       <span className="agent-chat-product-tag">

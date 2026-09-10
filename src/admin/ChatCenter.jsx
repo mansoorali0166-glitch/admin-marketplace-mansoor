@@ -824,6 +824,7 @@ export default function ChatCenter() {
                           margin: 0,
                           fontSize: "0.92rem",
                           whiteSpace: "pre-wrap",
+                          color: isMine ? "#ffffff" : "#0f172a",
                         }}
                       >
                         {msg.body}
@@ -835,6 +836,7 @@ export default function ChatCenter() {
                           display: "block",
                           textAlign: "right",
                           marginTop: "4px",
+                          color: isMine ? "#dbeafe" : "#64748b",
                         }}
                       >
                         {new Date(msg.created_at).toLocaleTimeString([], {
