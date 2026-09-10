@@ -50,3 +50,6 @@ $$;
 
 revoke all on function public.delete_agent_permanently(uuid) from public;
 grant execute on function public.delete_agent_permanently(uuid) to authenticated;
+
+-- Make the new RPC available to the website immediately.
+notify pgrst, 'reload schema';
