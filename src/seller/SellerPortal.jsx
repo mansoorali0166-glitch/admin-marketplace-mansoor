@@ -40,15 +40,9 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [avatarError, setAvatarError] = useState('');
   const [cropSource, setCropSource] = useState('');
   const [showTrafficModal, setShowTrafficModal] = useState(false);
-  const [trafficNow, setTrafficNow] = useState(Date.now());
   const [trafficBusy, setTrafficBusy] = useState(false);
-  const [trafficNotice, setTrafficNotice] = useState('');
+  const [trafficCelebration, setTrafficCelebration] = useState(null);
   const [trafficError, setTrafficError] = useState('');
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setTrafficNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const pickShopAvatarFile = async (file) => {
     if (!file) return;
@@ -157,51 +151,26 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
     setShowNameModal(false);
   };
 
-  const collectedAt = profile?.traffic_collected_at ? new Date(profile.traffic_collected_at).getTime() : 0;
-  const boostExpiresAt = profile?.traffic_boost_expires_at ? new Date(profile.traffic_boost_expires_at).getTime() : 0;
-  const nextCollectionAt = collectedAt ? collectedAt + 24 * 60 * 60 * 1000 : 0;
-  const boostWindowOpen = boostExpiresAt > trafficNow;
-  const boostEnabled = boostWindowOpen && profile?.traffic_boost_enabled === true;
-  const canCollectTraffic = !collectedAt || trafficNow >= nextCollectionAt;
-  const formatTrafficTime = (milliseconds) => {
-    const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  };
+  const freeTrafficClaimed = Boolean(profile?.free_traffic_claimed_at);
+  const freeTrafficAmount = Number(profile?.free_traffic_amount || 0);
   const collectTraffic = async () => {
     setTrafficBusy(true);
     setTrafficError('');
-    setTrafficNotice('');
-    const { data, error } = await portalClient.rpc('collect_seller_traffic');
+    const { data, error } = await portalClient.rpc('claim_seller_free_traffic');
     setTrafficBusy(false);
     if (error) {
       setTrafficError(error.message || 'Could not collect traffic.');
       await loadSellerData();
       return;
     }
+    const amount = Number(data?.amount || 0);
     setProfile((current) => current ? {
       ...current,
-      traffic_collected_at: data.traffic_collected_at,
-      traffic_boost_expires_at: data.traffic_boost_expires_at,
-      traffic_boost_enabled: data.traffic_boost_enabled,
+      free_traffic_claimed_at: data.claimed_at,
+      free_traffic_amount: amount,
     } : current);
-    setTrafficNow(Date.now());
-    setTrafficNotice('Traffic successfully collected');
-  };
-  const toggleTrafficBoost = async () => {
-    setTrafficBusy(true);
-    setTrafficError('');
-    const { data, error } = await portalClient.rpc('set_seller_traffic_boost', { enabled: !boostEnabled });
-    setTrafficBusy(false);
-    if (error) {
-      setTrafficError(error.message || 'Could not change the boost status.');
-      await loadSellerData();
-      return;
-    }
-    setProfile((current) => current ? { ...current, traffic_boost_enabled: data.traffic_boost_enabled, traffic_boost_expires_at: data.traffic_boost_expires_at } : current);
-    setTrafficNotice(data.traffic_boost_enabled ? 'Traffic boost turned on' : 'Traffic boost turned off');
+    setTrafficCelebration(amount);
+    await loadSellerData();
   };
 
   if (sellerView === 'messages') return <SellerMessages client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
@@ -246,7 +215,11 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           />
         )}
         <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
-        <button className="seller-traffic-banner" type="button" onClick={() => { setTrafficNotice(''); setTrafficError(''); setShowTrafficModal(true); }}><strong>Market<span>·</span><br />Hub</strong><div>{profile?.traffic_enabled === false ? <>Marketplace Traffic<br /><em>Your clicks are stopped</em></> : boostWindowOpen ? <><b>{boostEnabled ? 'Traffic boost active' : 'Traffic boost is off'}</b><br /><em>{formatTrafficTime(boostExpiresAt - trafficNow)}</em> remaining</> : canCollectTraffic ? <>Marketplace Traffic<br /><em>2-hour boost available</em></> : <>Next traffic collection<br /><em>{formatTrafficTime(nextCollectionAt - trafficNow)}</em></>}</div><i /></button>
+        <button className="seller-traffic-banner" type="button" onClick={() => { setTrafficCelebration(null); setTrafficError(''); setShowTrafficModal(true); }}>
+          <span className="seller-traffic-gift" aria-hidden="true">🎁</span>
+          <span><strong>Free Traffic Package</strong><small>{freeTrafficClaimed ? `${freeTrafficAmount.toLocaleString()} traffic claimed` : 'Claim up to 3,000 product exposures'}</small></span>
+          <b aria-hidden="true">›</b>
+        </button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
         <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
         <section className="seller-sales-chart"><h2>Total Sales</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Sales</div></section>
@@ -254,7 +227,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
       {showNameModal && <div className="shop-name-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !nameSaving && setShowNameModal(false)}><form className="shop-name-modal" onSubmit={saveShopName}><div className="shop-name-modal-header"><button type="button" disabled={nameSaving} onClick={() => setShowNameModal(false)}>×</button><h2>Edit Shop Name</h2><span /></div><div className="shop-name-modal-body"><p>Shop name can only be changed once</p><input autoFocus maxLength="40" value={shopNameDraft} onChange={(event) => setShopNameDraft(event.target.value)} aria-label="Shop name" disabled={nameSaving} />{nameError && <p className="shop-name-error">{nameError}</p>}<button type="submit" disabled={!shopNameDraft.trim() || nameSaving}>{nameSaving ? 'Saving…' : 'Confirm'}</button></div></form></div>}
-      {showTrafficModal && <div className="seller-traffic-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && setShowTrafficModal(false)}><section className="seller-traffic-modal" role="dialog" aria-modal="true" aria-labelledby="traffic-modal-title"><button className="seller-traffic-modal-close" type="button" onClick={() => setShowTrafficModal(false)}>×</button><h2 id="traffic-modal-title">Demo Product Exposure</h2><p className="seller-traffic-description">Each collection gives your account a two-hour traffic boost. You can collect once every 24 hours.</p>{trafficNotice && <p className="seller-traffic-success">{trafficNotice}</p>}{trafficError && <p className="seller-traffic-error">{trafficError}</p>}{profile?.traffic_enabled === false ? <p className="seller-traffic-status">Traffic is disabled for this account.</p> : boostWindowOpen ? <><p className="seller-traffic-status"><strong>{boostEnabled ? 'Boost is ON' : 'Boost is OFF'}</strong><span>{formatTrafficTime(boostExpiresAt - trafficNow)} remaining</span></p><button className={`seller-collect-traffic ${boostEnabled ? 'turn-off' : ''}`} type="button" disabled={trafficBusy || previewMerchant} onClick={toggleTrafficBoost}>{trafficBusy ? 'Saving…' : boostEnabled ? 'Turn Boost Off' : 'Turn Boost On'}</button></> : canCollectTraffic ? <button className="seller-collect-traffic" type="button" disabled={trafficBusy || previewMerchant} onClick={collectTraffic}>{trafficBusy ? 'Collecting…' : 'Collect Traffic'}</button> : <p className="seller-traffic-status"><strong>Already collected</strong><span>Available again in {formatTrafficTime(nextCollectionAt - trafficNow)}</span></p>}</section></div>}
+      {showTrafficModal && <div className="seller-traffic-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !trafficBusy && setShowTrafficModal(false)}><section className="seller-traffic-modal" role="dialog" aria-modal="true" aria-labelledby="traffic-modal-title"><button className="seller-traffic-modal-close" type="button" disabled={trafficBusy} onClick={() => setShowTrafficModal(false)}>×</button>{trafficCelebration ? <div className="seller-traffic-celebration"><div className="seller-confetti" aria-hidden="true">🎉</div><h2 id="traffic-modal-title">Congratulations!</h2><p>You have won</p><strong>{trafficCelebration.toLocaleString()} traffic</strong><small>Your free traffic was added successfully.</small><button className="seller-collect-traffic" type="button" onClick={() => setShowTrafficModal(false)}>Done</button></div> : <><div className="seller-package-art" aria-hidden="true"><span>☆</span><b>🎁</b></div><h2 id="traffic-modal-title">Free Traffic Package</h2><p className="seller-traffic-description">Claim a random reward of up to 3,000 product exposures.</p>{trafficError && <p className="seller-traffic-error">{trafficError}</p>}{freeTrafficClaimed ? <div className="seller-traffic-status"><strong>Package already claimed</strong><span>You received {freeTrafficAmount.toLocaleString()} traffic.</span></div> : <button className="seller-collect-traffic" type="button" disabled={trafficBusy || previewMerchant} onClick={collectTraffic}>{trafficBusy ? 'Claiming…' : 'Claim'}</button>}<div className="seller-traffic-rules"><strong>Rules</strong><span>1. Each seller can claim this package once.</span><span>2. Your reward is selected randomly from 1 to 3,000.</span><span>3. Traffic is added to Product Clicks automatically.</span></div></>}</section></div>}
     </main>
   );
 }
