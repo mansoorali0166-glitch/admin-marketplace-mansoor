@@ -12,6 +12,9 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists shop_locked boolean not null default false;
 alter table public.profiles add column if not exists showcase_visible boolean not null default true;
 alter table public.profiles add column if not exists traffic_enabled boolean not null default true;
+alter table public.profiles add column if not exists traffic_collected_at timestamptz;
+alter table public.profiles add column if not exists traffic_boost_expires_at timestamptz;
+alter table public.profiles add column if not exists traffic_boost_enabled boolean not null default false;
 alter table public.profiles add column if not exists invitation_code_enabled boolean not null default true;
 
 create table if not exists public.merchant_clicks (
