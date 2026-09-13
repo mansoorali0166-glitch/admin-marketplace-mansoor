@@ -30,16 +30,17 @@ begin
     raise exception 'This free traffic package has already been claimed';
   end if;
 
-  reward_amount := floor(random() * 3000)::integer + 1;
+  -- 20% receive 2,500-3,000; the remaining 80% receive 1,500-2,500.
+  if random() < 0.20 then
+    reward_amount := floor(random() * 501)::integer + 2500;
+  else
+    reward_amount := floor(random() * 1001)::integer + 1500;
+  end if;
 
   update public.profiles
   set free_traffic_claimed_at = claimed_at,
       free_traffic_amount = reward_amount
   where id = auth.uid();
-
-  insert into public.merchant_clicks (seller_id, source, created_by, created_at)
-  select auth.uid(), 'free-traffic-package', auth.uid(), claimed_at
-  from generate_series(1, reward_amount);
 
   return jsonb_build_object('amount', reward_amount, 'claimed_at', claimed_at);
 end;
