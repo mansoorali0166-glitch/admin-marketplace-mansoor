@@ -39,6 +39,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [cropSource, setCropSource] = useState('');
+  const [showTrafficModal, setShowTrafficModal] = useState(false);
+  const [trafficCollected, setTrafficCollected] = useState(false);
 
   const pickShopAvatarFile = async (file) => {
     if (!file) return;
@@ -189,7 +191,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           />
         )}
         <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
-        <section className="seller-traffic-banner"><strong>Market<span>·</span><br />Hub</strong><div>{profile?.traffic_enabled === false ? <>Marketplace Traffic<br /><em>Your clicks are stopped</em></> : <>Grow with <b>Marketplace Traffic</b><br /><em>Demo</em> product exposure</>}</div><i /></section>
+        <button className="seller-traffic-banner" type="button" onClick={() => { setTrafficCollected(false); setShowTrafficModal(true); }}><strong>Market<span>·</span><br />Hub</strong><div>{profile?.traffic_enabled === false ? <>Marketplace Traffic<br /><em>Your clicks are stopped</em></> : <>Grow with <b>Marketplace Traffic</b><br /><em>Demo</em> product exposure</>}</div><i /></button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
         <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
         <section className="seller-sales-chart"><h2>Total Sales</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Sales</div></section>
@@ -197,6 +199,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
       {showNameModal && <div className="shop-name-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !nameSaving && setShowNameModal(false)}><form className="shop-name-modal" onSubmit={saveShopName}><div className="shop-name-modal-header"><button type="button" disabled={nameSaving} onClick={() => setShowNameModal(false)}>×</button><h2>Edit Shop Name</h2><span /></div><div className="shop-name-modal-body"><p>Shop name can only be changed once</p><input autoFocus maxLength="40" value={shopNameDraft} onChange={(event) => setShopNameDraft(event.target.value)} aria-label="Shop name" disabled={nameSaving} />{nameError && <p className="shop-name-error">{nameError}</p>}<button type="submit" disabled={!shopNameDraft.trim() || nameSaving}>{nameSaving ? 'Saving…' : 'Confirm'}</button></div></form></div>}
+      {showTrafficModal && <div className="seller-traffic-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && setShowTrafficModal(false)}><section className="seller-traffic-modal" role="dialog" aria-modal="true" aria-labelledby="traffic-modal-title"><button className="seller-traffic-modal-close" type="button" onClick={() => setShowTrafficModal(false)}>×</button><h2 id="traffic-modal-title">Demo Product Exposure</h2>{trafficCollected ? <p className="seller-traffic-success">Traffic successfully collected</p> : <button className="seller-collect-traffic" type="button" onClick={() => setTrafficCollected(true)}>Collect Traffic</button>}</section></div>}
     </main>
   );
 }
