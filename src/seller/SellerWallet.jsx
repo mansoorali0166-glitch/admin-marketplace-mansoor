@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import './SellerWallet.css';
 import SellerRecharge from './SellerRecharge';
 import SellerWithdraw from './SellerWithdraw';
@@ -29,18 +29,30 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   const [walletView, setWalletView] = useState('wallet');
   const [liveTransactions, setLiveTransactions] = useState([]);
   const [frozen, setFrozen] = useState(0);
+  const loadWallet = useCallback(async () => {
+    if (!sellerId) return;
+    const [txnRes, lockRes] = await Promise.all([
+      client.from('wallet_transactions').select('*').eq('seller_id', sellerId).order('created_at', { ascending: false }),
+      client.from('balance_locks').select('amount,status,lock_until').eq('seller_id', sellerId),
+    ]);
+    setLiveTransactions((txnRes.data || []).map((row) => ({ id: row.id, type: /withdraw/i.test(row.type) ? 'Withdraw' : /order/i.test(row.type) ? 'Orders' : 'Recharge', title: row.type || 'Balance transaction', date: new Date(row.created_at).toLocaleString(), amount: `${Number(row.amount || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(row.amount || 0)).toFixed(2)}` })));
+    const now = Date.now();
+    setFrozen((lockRes.data || []).filter((row) => String(row.status).toLowerCase() === 'active' && (!row.lock_until || new Date(row.lock_until).getTime() > now)).reduce((sum, row) => sum + Number(row.amount || 0), 0));
+  }, [client, sellerId]);
   useEffect(() => {
     if (!sellerId) return;
-    Promise.all([
-      client.from('wallet_transactions').select('*').eq('seller_id', sellerId).order('created_at', { ascending: false }),
-      client.from('balance_locks').select('amount,status').eq('seller_id', sellerId),
-    ]).then(([txnRes, lockRes]) => {
-      setLiveTransactions((txnRes.data || []).map((row) => ({ id: row.id, type: /withdraw/i.test(row.type) ? 'Withdraw' : /order/i.test(row.type) ? 'Orders' : 'Recharge', title: row.type || 'Balance transaction', date: new Date(row.created_at).toLocaleString(), amount: `${Number(row.amount || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(row.amount || 0)).toFixed(2)}` })));
-      setFrozen((lockRes.data || []).filter((row) => String(row.status).toLowerCase() === 'active').reduce((sum, row) => sum + Number(row.amount || 0), 0));
-    });
-  }, [client, sellerId]);
+    loadWallet();
+    const refresh = () => loadWallet();
+    window.addEventListener('focus', refresh);
+    const channel = client.channel(`seller-wallet-${sellerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions', filter: `seller_id=eq.${sellerId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'balance_locks', filter: `seller_id=eq.${sellerId}` }, refresh)
+      .subscribe();
+    return () => { window.removeEventListener('focus', refresh); client.removeChannel(channel); };
+  }, [client, sellerId, loadWallet]);
   const sourceTransactions = sellerId ? liveTransactions : transactions;
-  const assets = sourceTransactions.reduce((sum, item) => sum + (item.amount.startsWith('-') ? -1 : 1) * Number(item.amount.replace(/[^0-9.]/g, '') || 0), 0);
+  const walletTotal = sourceTransactions.reduce((sum, item) => sum + (item.amount.startsWith('-') ? -1 : 1) * Number(item.amount.replace(/[^0-9.]/g, '') || 0), 0);
+  const assets = Math.max(0, walletTotal - frozen);
   const visibleTransactions = useMemo(() => filter === 'All' ? sourceTransactions : sourceTransactions.filter((item) => item.type === filter), [filter, sourceTransactions]);
 
   if (walletView === 'recharge') return <SellerRecharge client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
