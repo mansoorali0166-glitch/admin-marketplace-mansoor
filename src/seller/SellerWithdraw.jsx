@@ -104,7 +104,7 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
       showNotice('Your bank card has been temporarily locked. Please contact your agent.');
       return;
     }
-    const { data, error } = await client.from('withdrawals').insert({seller_id:effectiveSellerId,amount:Number(amount),method,account_details:account,status:'Pending'}).select().single();
+    const { data, error } = await client.rpc('request_seller_withdrawal', { withdrawal_amount: Number(amount), withdrawal_method: method, withdrawal_account: account, supplied_trade_password: tradePassword });
     if (error) { showNotice(`Could not submit withdrawal: ${error.message}`); return; }
     const idLabel = data?.id != null ? String(data.id).slice(0, 8).toUpperCase() + '...' : `${Date.now().toString(16).toUpperCase().slice(-8)}...`;
     const record = { id: idLabel, dbId:data?.id,amount: Number(amount), method, account, date: new Date(data?.created_at||Date.now()).toLocaleString(), status: 'Pending' };
@@ -116,11 +116,11 @@ export default function SellerWithdraw({ onBack, recordsOnly = false, onNewWithd
   return <main className="seller-withdraw-page"><div className="seller-withdraw-shell">
     <header><button type="button" onClick={onBack}>‹</button><h1>{recordsOnly ? 'Withdrawal Records' : 'Withdraw'}</h1>{recordsOnly ? <button className="withdraw-header-refresh" type="button" onClick={loadCloudRecords}>Refresh</button> : <span />}</header>
     {!recordsOnly && <>{notice && <div className={`withdraw-success-notice ${noticeType}`} role="alert">{notice}</div>}
-    <div className="withdraw-info">Withdrawal requests are reviewed by our team and processed within 1–3 business days. Your balance will be held until the request is approved.</div>
+    <div className="withdraw-info">The amount is deducted when you submit. If the request is rejected, the full amount is returned automatically.</div>
     <form className="withdraw-form" onSubmit={submit}>
       <label>Withdraw Method<button className={`withdraw-method-trigger${method ? ' selected' : ''}`} type="button" onClick={() => setMethodPickerOpen(true)}><span>{method || 'Select withdraw method'}</span><span>›</span></button></label>
       <label>Account Details<input required placeholder={method === 'Bank Card' ? 'Bank account number / name' : method === 'E-Wallet' ? 'E-wallet account number / name' : method === 'Crypto' ? 'Wallet address / network' : 'Enter account details'} value={account} onChange={(event) => setAccount(event.target.value)} /></label>
-      <label>Amount $<input required min="1" max="4752.92" step="0.01" type="number" placeholder="Enter withdraw amount" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+      <label>Amount $<input required min="1" step="0.01" type="number" placeholder="Enter withdraw amount" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
       <label>Trade Password<input required type="password" placeholder="Enter trade password" value={tradePassword} onChange={(event) => setTradePassword(event.target.value)} /></label>
       <button type="submit">Withdraw</button>
     </form></>}

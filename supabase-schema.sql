@@ -116,7 +116,7 @@ create table if not exists public.withdrawals (
 );
 create table if not exists public.wallet_transactions (
   id uuid primary key default gen_random_uuid(), seller_id uuid references public.profiles(id), type text not null,
-  amount numeric(12,2) not null, note text, order_id uuid references public.orders(id) on delete restrict,
+  amount numeric(12,2) not null, note text, order_id uuid references public.orders(id) on delete restrict, withdrawal_id text,
   created_at timestamptz not null default now()
 );
 create table if not exists public.payment_methods (

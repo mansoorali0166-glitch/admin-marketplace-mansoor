@@ -119,11 +119,7 @@ export default function MerchantFinanceModals({ client, merchant, action, onClos
   const approveWithdrawal = async (withdrawal) => {
     setBusy(true);
     setMessage('');
-    const { data: approved, error: updateError } = await client.from('withdrawals').update({ status: 'Approved', updated_at: new Date().toISOString() }).eq('id', withdrawal.id).eq('status', 'Pending').select('id').maybeSingle();
-    let error = updateError;
-    if (!error && approved) {
-      ({ error } = await client.from('wallet_transactions').insert({ seller_id: merchant.userId, type: `${actor} Debit`, amount: -Math.abs(Number(withdrawal.amount || 0)), note: `Withdrawal #${withdrawal.id} approved` }));
-    }
+    const { data: approved, error } = await client.rpc('review_seller_withdrawal', { target_withdrawal_id: String(withdrawal.id), review_decision: 'Approved', review_reason: null });
     setBusy(false);
     if (error) return setMessage(error.message);
     setMessage(approved ? 'Withdrawal approved.' : 'This request was already processed.');
@@ -133,7 +129,7 @@ export default function MerchantFinanceModals({ client, merchant, action, onClos
   const rejectWithdrawal = async (event) => {
     event.preventDefault();
     setBusy(true); setMessage('');
-    const { data: rejected, error } = await client.from('withdrawals').update({ status: 'Rejected', rejection_reason: rejectionReason.trim() || null, updated_at: new Date().toISOString() }).eq('id', rejectingWithdrawal.id).eq('status', 'Pending').select('id').maybeSingle();
+    const { data: rejected, error } = await client.rpc('review_seller_withdrawal', { target_withdrawal_id: String(rejectingWithdrawal.id), review_decision: 'Rejected', review_reason: rejectionReason.trim() || null });
     setBusy(false);
     if (error) return setMessage(error.message);
     setRejectingWithdrawal(null); setRejectionReason('');
