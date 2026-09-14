@@ -3,7 +3,7 @@
 create extension if not exists pgcrypto with schema extensions;
 
 alter table public.profiles add column if not exists trade_password_hash text;
-alter table public.wallet_transactions add column if not exists order_id uuid references public.orders(id) on delete restrict;
+alter table public.wallet_transactions add column if not exists order_id bigint references public.orders(id) on delete restrict;
 create unique index if not exists wallet_transactions_one_order_payment
   on public.wallet_transactions(order_id)
   where order_id is not null;
@@ -46,7 +46,8 @@ begin
 end;
 $$;
 
-create or replace function public.pay_seller_order(target_order_id uuid, supplied_trade_password text)
+drop function if exists public.pay_seller_order(uuid, text);
+create or replace function public.pay_seller_order(target_order_id bigint, supplied_trade_password text)
 returns jsonb
 language plpgsql
 security definer
@@ -93,7 +94,7 @@ $$;
 
 revoke all on function public.set_seller_trade_password(text) from public;
 revoke all on function public.change_seller_trade_password(text, text) from public;
-revoke all on function public.pay_seller_order(uuid, text) from public;
+revoke all on function public.pay_seller_order(bigint, text) from public;
 grant execute on function public.set_seller_trade_password(text) to authenticated;
 grant execute on function public.change_seller_trade_password(text, text) to authenticated;
-grant execute on function public.pay_seller_order(uuid, text) to authenticated;
+grant execute on function public.pay_seller_order(bigint, text) to authenticated;
