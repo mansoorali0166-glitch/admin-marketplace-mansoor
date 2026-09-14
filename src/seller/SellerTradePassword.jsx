@@ -1,20 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import './SellerTradePassword.css';
 
-export default function SellerTradePassword({ onBack }) {
+export default function SellerTradePassword({ onBack, client }) {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' });
   const [visible, setVisible] = useState({ current: false, next: false, confirm: false });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    const savedPassword = localStorage.getItem('seller_trade_password');
-    if (savedPassword && form.current !== savedPassword) return setError('Current trade password is incorrect.');
     if (form.next.length < 6 || form.next.length > 20) return setError('New trade password must contain 6–20 characters.');
     if (form.next !== form.confirm) return setError('The new passwords do not match.');
-    localStorage.setItem('seller_trade_password', form.next);
+    const { error: saveError } = await client.rpc('change_seller_trade_password', { current_trade_password: form.current || null, new_trade_password: form.next });
+    if (saveError) return setError(saveError.message);
     setError('');
     setNotice('Trade password changed successfully.');
     setForm({ current: '', next: '', confirm: '' });

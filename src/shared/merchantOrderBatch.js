@@ -13,6 +13,6 @@ export function buildMerchantOrders({ sellerId, items, products, buyers, buyerId
     if (!Number.isFinite(sellPrice) || sellPrice < 0 || !Number.isFinite(costPrice) || costPrice < 0) throw new Error('This product has an invalid price.');
     return { seller_id: sellerId, order_no: `MH${batchId}-${index + 1}`, product_name: product.name || product.product_code,
       customer_name: buyer.name, shipping_address: [buyer.address, buyer.city, buyer.state, buyer.postal, buyer.country].filter(Boolean).join(', '),
-      quantity, sell_price: sellPrice, cost_price: costPrice, status: 'Pending Ship' };
+      quantity, sell_price: sellPrice, cost_price: costPrice, status: 'Pending Payment' };
   });
 }

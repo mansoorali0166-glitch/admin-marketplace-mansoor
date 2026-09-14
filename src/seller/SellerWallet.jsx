@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './SellerWallet.css';
 import SellerRecharge from './SellerRecharge';
 import SellerWithdraw from './SellerWithdraw';
@@ -49,7 +49,7 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   if (walletView === 'bank-card') return <SellerBankCard client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
   if (walletView === 'e-wallet') return <SellerEWallet client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
   if (walletView === 'digital-currency') return <SellerDigitalCurrency client={client} sellerId={sellerId} onBack={() => setWalletView('wallet')} />;
-  if (walletView === 'trade-password') return <SellerTradePassword onBack={() => setWalletView('wallet')} />;
+  if (walletView === 'trade-password') return <SellerTradePassword client={client} onBack={() => setWalletView('wallet')} />;
   if (walletView === 'change-password') return <SellerChangePassword onBack={() => setWalletView('wallet')} />;
 
   return <main className="seller-wallet-page"><div className="seller-wallet-shell">
