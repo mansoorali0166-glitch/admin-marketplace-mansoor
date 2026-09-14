@@ -30,6 +30,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [profile, setProfile] = useState(null);
   const [orders, setOrders] = useState([]);
   const [clickCount, setClickCount] = useState(0);
+  const [showcaseCount, setShowcaseCount] = useState(null);
   const [portalClient, setPortalClient] = useState(sellerSupabase);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState('');
@@ -98,14 +99,16 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
       if (id) setSellerId(id);
     }
     if (!id) return;
-    const [profileRes, ordersRes, clicksRes] = await Promise.all([
+    const [profileRes, ordersRes, clicksRes, showcaseRes] = await Promise.all([
       client.from('profiles').select('*').eq('id', id).maybeSingle(),
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
       client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).neq('source', 'free-traffic-package').not('source', 'like', 'adjustment:remove:%').not('source', 'like', 'adjustment:stop:%'),
+      client.from('showcase_products').select('product_id', { count: 'exact', head: true }).eq('seller_id', id),
     ]);
     if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.email || ''); }
     setOrders(ordersRes.data || []);
     setClickCount(clicksRes.count || clicksRes.data?.length || 0);
+    setShowcaseCount(showcaseRes.error ? null : showcaseRes.count);
   };
   useEffect(() => {
     loadSellerData();
@@ -114,6 +117,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           .channel(`seller-home-${sellerId}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_clicks', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'showcase_products', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${sellerId}` }, (payload) => {
             loadSellerData();
             if (payload.new?.allow_login === false && !previewMerchant) {
@@ -148,7 +152,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
 
   if (sellerView === 'messages') return <SellerMessages client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
   if (sellerView === 'wallet') return <SellerWallet client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
-  if (sellerView === 'showcase') return <SellerShowcase client={portalClient} sellerId={sellerId} shopLocked={profile?.shop_locked === true} onBack={() => setSellerView('home')} />;
+  if (sellerView === 'showcase') return <SellerShowcase client={portalClient} sellerId={sellerId} shopLocked={profile?.shop_locked === true} onBack={() => { setSellerView('home'); loadSellerData(); }} />;
   if (sellerView === 'orders') return <SellerOrders client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
   if (sellerView === 'invite') return <SellerInvite client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
   if (sellerView === 'feedback') return <SellerFeedback client={portalClient} sellerId={sellerId} onBack={() => setSellerView('home')} />;
@@ -157,7 +161,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   return (
     <main className="seller-center-page">
       <div className="seller-center-shell">
-        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>MarketHub Seller Center</h1><div><button type="button" onClick={() => setSellerView('messages')} aria-label="Messages">◌</button><button type="button" aria-label="Language">◎</button></div></header>
+        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>MarketHub Seller Center</h1><div><button type="button" onClick={() => setSellerView('messages')} aria-label="Messages"><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg></button><button type="button" aria-label="Language">◎</button></div></header>
         <section className="seller-profile-row">
           <div
             className="seller-avatar-wrap"
@@ -187,11 +191,10 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
             onConfirm={confirmShopAvatarCrop}
           />
         )}
-        <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
-        <button className="seller-traffic-banner" type="button" onClick={() => { setTrafficError(''); setShowTrafficModal(true); }}>
-          <span className="seller-traffic-gift" aria-hidden="true">🎁</span>
-          <span><strong>Free Traffic Package</strong></span>
-          <b aria-hidden="true">›</b>
+        <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase ({showcaseCount === null ? '…' : showcaseCount.toLocaleString()})</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
+        <button className="seller-traffic-banner seller-exposure-banner" type="button" aria-label="Free Traffic Package" onClick={() => { setTrafficError(''); setShowTrafficModal(true); }}>
+          <span className="seller-exposure-brand">Market<span>Hub</span><br />Shop</span>
+          <span className="seller-exposure-copy"><strong>Help to get <em>Free Traffic</em></strong><small>Give your products <b>more exposure</b></small></span>
         </button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
         <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
