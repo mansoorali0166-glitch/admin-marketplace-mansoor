@@ -95,7 +95,14 @@ revoke all on function public.normalize_seller_application_identity() from publi
 revoke all on function public.normalize_seller_auth_metadata() from public;
 revoke all on function public.ensure_merchant_application(uuid,text) from public;
 grant execute on function public.ensure_merchant_application(uuid,text) to anon,authenticated;
-revoke execute on function public.update_own_seller_display_name(text) from public,anon,authenticated;
+-- Older deployments may never have installed the seller-name editing RPC.
+do $$
+begin
+  if to_regprocedure('public.update_own_seller_display_name(text)') is not null then
+    execute 'revoke execute on function public.update_own_seller_display_name(text) from public,anon,authenticated';
+  end if;
+end;
+$$;
 
 notify pgrst, 'reload schema';
 commit;

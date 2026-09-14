@@ -9,6 +9,8 @@ export default function SellerLogin({ onLoginSuccess }) {
   const [gettingStarted, setGettingStarted] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [invitationCode, setInvitationCode] = useState(() => new URLSearchParams(window.location.search).get('code') || '');
   const [error, setError] = useState('');
@@ -41,6 +43,10 @@ export default function SellerLogin({ onLoginSuccess }) {
 
   const openVerification = (event) => {
     event.preventDefault(); setError(''); setNotice('');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match. Please enter the same password in both fields.');
+      return;
+    }
     setGettingStarted(true);
   };
 
@@ -72,12 +78,13 @@ export default function SellerLogin({ onLoginSuccess }) {
     setRegistering(false);
     setGettingStarted(false);
     setPassword('');
+    setConfirmPassword('');
     window.history.replaceState({}, '', '/seller');
     setNotice('Application submitted successfully. Your agent must approve it before you can log in.');
   };
 
   const switchMode = (next) => {
-    setRegistering(next); setVerifying(false); setGettingStarted(false); setError(''); setNotice(''); setPassword('');
+    setRegistering(next); setVerifying(false); setGettingStarted(false); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); setShowPassword(false); setShowConfirmPassword(false);
     window.history.replaceState({}, '', next ? '/seller/register' : '/seller');
   };
 
@@ -85,6 +92,7 @@ export default function SellerLogin({ onLoginSuccess }) {
     <header><span /> <strong>{verifying ? 'Verification' : gettingStarted ? 'Get Started' : registering ? 'Registration' : 'Login'}</strong>{gettingStarted ? <span /> : <button type="button" aria-label="Language">◎</button>}</header>
     <div className="seller-login-card">
       <div className="seller-login-heading"><span className="seller-mobile-mark">M</span><h1>MarketHub Online Shop</h1></div>
+      {!gettingStarted && !verifying && <div className={`seller-auth-intro ${registering ? 'registration' : ''}`}><h2>{registering ? 'Create your seller account' : 'Welcome back'}</h2><p>{registering ? 'Register with your email to get started.' : 'Log in to your seller account.'}</p></div>}
       {gettingStarted ? <div className="seller-get-started"><button autoFocus className="seller-sign-in-btn" type="button" onClick={() => { setGettingStarted(false); setVerifying(true); }}>Get Started</button></div> : verifying ? <form className="seller-verification-form" onSubmit={handleRegister}>
         <h2>Enter verification code</h2><p>Ask your agent for their invitation code, then enter it below to submit your application.</p>
         <label htmlFor="seller-invitation-code">Verification Code</label><input id="seller-invitation-code" type="text" autoFocus placeholder="Enter agent code" value={invitationCode} onChange={(event) => setInvitationCode(event.target.value.toUpperCase())} required />
@@ -92,7 +100,8 @@ export default function SellerLogin({ onLoginSuccess }) {
         <button className="seller-register-btn seller-verification-back" type="button" disabled={submitting} onClick={() => { setVerifying(false); setError(''); }}>Back</button>
       </form> : <form onSubmit={registering ? openVerification : handleLogin}>
         <label htmlFor="seller-email">Email Address</label><input id="seller-email" type="email" placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} required />
-        <label htmlFor="seller-password">Password</label><div className="seller-password-input"><input id="seller-password" type={showPassword ? 'text' : 'password'} minLength="6" placeholder="Create your password" value={password} onChange={(event) => setPassword(event.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? '◉' : '◎'}</button></div>
+        <label htmlFor="seller-password">Password</label><div className="seller-password-input"><input id="seller-password" type={showPassword ? 'text' : 'password'} minLength="6" autoComplete={registering ? 'new-password' : 'current-password'} placeholder={registering ? 'Create your password' : 'Enter your password'} value={password} onChange={(event) => setPassword(event.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? '◉' : '◎'}</button></div>
+        {registering && <><label htmlFor="seller-confirm-password">Confirm Password</label><div className="seller-password-input"><input id="seller-confirm-password" type={showConfirmPassword ? 'text' : 'password'} minLength="6" autoComplete="new-password" placeholder="Enter your password again" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /><button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}>{showConfirmPassword ? '◉' : '◎'}</button></div></>}
         {error && <p className="seller-login-error">{error}</p>}{notice && <p className="seller-login-notice">{notice}</p>}
         <button className="seller-sign-in-btn" type="submit" disabled={submitting}>{submitting ? 'Please wait…' : registering ? 'Register' : 'Login'}</button>
       </form>}

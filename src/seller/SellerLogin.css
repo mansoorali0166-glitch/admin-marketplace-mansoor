@@ -7,6 +7,10 @@
 .seller-login-heading { display: grid; justify-items: center; margin: 4px 0 22px; }
 .seller-mobile-mark { width: 88px; height: 88px; display: grid; place-items: center; margin-bottom: 10px; border-radius: 28px 28px 36px 20px; transform: rotate(-8deg); background: linear-gradient(145deg, #7ce2d3, #1ec6c7); color: #fff; font-size: 38px; font-weight: 800; box-shadow: 10px 12px 0 #f3b5ba, -8px -5px 0 #dff5cf; }
 .seller-login-heading h1 { margin: 0; font-size: 16px; font-weight: 700; }
+.seller-auth-intro { margin: 0 0 20px; text-align: center; }
+.seller-auth-intro h2 { margin: 0 0 8px; font-size: 21px; color: #17181c; }
+.seller-auth-intro p { margin: 0; color: #697386; font-size: 14px; line-height: 1.5; }
+.seller-auth-intro.registration { padding: 15px 10px; border-top: 2px solid #ff3158; border-radius: 4px; background: #fff7f9; }
 .seller-login-card form label { display: block; margin: 16px 0 10px; font-size: 13px; font-weight: 500; }
 .seller-login-card form > input { box-sizing: border-box; width: 100%; height: 50px; padding: 0; border: 0; border-bottom: 1px solid #32343a; border-radius: 0; outline: none; background: #fff; color: #111827; font: inherit; }
 .seller-login-card form > input::placeholder { color: #8b8d93; }

@@ -51,6 +51,7 @@ function setup({ validCode = true, status = 'Pending', registering = true } = {}
   const submit = () => find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
   const start = async () => {
     fill('seller-email', 'seller@example.com'); fill('seller-password', 'test-password');
+    fill('seller-confirm-password', 'test-password');
     await submit();
     const buttons = nodes(render()).filter(node => node.type === 'button');
     assert.equal(buttons.length, 1);
@@ -62,7 +63,7 @@ function setup({ validCode = true, status = 'Pending', registering = true } = {}
 
 test('email/password -> Get Started -> invitation -> pending application', async () => {
   const app = setup();
-  assert.deepEqual(app.inputs().map(node => node.props.id), ['seller-email', 'seller-password']);
+  assert.deepEqual(app.inputs().map(node => node.props.id), ['seller-email', 'seller-password', 'seller-confirm-password']);
   await app.start();
   assert.equal(app.calls.length, 0);
   assert.equal(app.find(node => node.props.id === 'seller-invitation-code').props.value, 'INV-TEST');
@@ -72,6 +73,23 @@ test('email/password -> Get Started -> invitation -> pending application', async
   assert.equal(signup.payload.email, 'seller@example.com');
   assert.deepEqual(app.calls.map(call => call.name), ['verify_agent_invitation_code', 'signUp', 'ensure_merchant_application', 'signOut']);
   assert.equal(app.loggedIn(), false);
+});
+
+test('mismatching passwords keep the seller on registration', async () => {
+  const app = setup();
+  app.fill('seller-email', 'seller@example.com');
+  app.fill('seller-password', 'test-password');
+  app.fill('seller-confirm-password', 'different-password');
+  await app.submit();
+  assert.ok(app.find(node => node.props.id === 'seller-confirm-password'));
+  assert.match(app.find(node => node.props.className === 'seller-login-error').children[0], /Passwords do not match/);
+  assert.equal(app.calls.length, 0);
+});
+
+test('login has its own heading and no confirm-password field', () => {
+  const app = setup({ registering: false });
+  assert.deepEqual(app.inputs().map(node => node.props.id), ['seller-email', 'seller-password']);
+  assert.equal(app.find(node => node.type === 'h2').children[0], 'Welcome back');
 });
 
 test('invalid invitation creates neither a user nor an application', async () => {
