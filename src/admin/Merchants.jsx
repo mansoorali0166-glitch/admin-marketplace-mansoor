@@ -30,7 +30,7 @@ export default function Merchants() {
       const sellerProfiles = profiles.filter((profile) => String(profile.role || '').trim().toLowerCase() === 'seller');
       const totals = (transactions || []).reduce((map, entry) => ({ ...map, [entry.seller_id]: (map[entry.seller_id] || 0) + Number(entry.amount || 0) }), {});
       const frozen = (locks || []).filter((entry) => entry.status === 'Active' && (!entry.lock_until || new Date(entry.lock_until) > new Date())).reduce((map, entry) => ({ ...map, [entry.seller_id]: (map[entry.seller_id] || 0) + Number(entry.amount || 0) }), {});
-      setMerchants(sellerProfiles.map((profile) => ({ userId: profile.id, id: profile.id.slice(0, 8).toUpperCase(), name: profile.display_name || profile.email.split('@')[0], email: profile.email, balance: `$${(totals[profile.id] || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, frozen: `$${(frozen[profile.id] || 0).toFixed(2)} frozen`, credit: profile.credit_score ?? 100, status: profile.allow_login === false ? 'Suspended' : 'Active' })));
+      setMerchants(sellerProfiles.map((profile) => ({ userId: profile.id, id: profile.id.slice(0, 8).toUpperCase(), name: profile.email || 'Seller', email: profile.email, balance: `$${(totals[profile.id] || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, frozen: `$${(frozen[profile.id] || 0).toFixed(2)} frozen`, credit: profile.credit_score ?? 100, status: profile.allow_login === false ? 'Suspended' : 'Active' })));
     }
     setLoading(false);
   };

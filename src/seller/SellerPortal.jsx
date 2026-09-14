@@ -24,12 +24,7 @@ const faqs = [
 export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [period, setPeriod] = useState('Today');
   const [openFaq, setOpenFaq] = useState(null);
-  const [shopName, setShopName] = useState(previewMerchant?.name || 'Khan321');
-  const [shopNameDraft, setShopNameDraft] = useState(previewMerchant?.name || 'Khan321');
-  const [showNameModal, setShowNameModal] = useState(false);
-  const [nameChanged, setNameChanged] = useState(false);
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameError, setNameError] = useState('');
+  const [shopName, setShopName] = useState(previewMerchant?.email || '');
   const [sellerView, setSellerView] = useState('home');
   const [sellerId, setSellerId] = useState(previewMerchant?.userId || null);
   const [profile, setProfile] = useState(null);
@@ -109,7 +104,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
       client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).neq('source', 'free-traffic-package').not('source', 'like', 'adjustment:remove:%').not('source', 'like', 'adjustment:stop:%'),
     ]);
-    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.display_name || shopName); }
+    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.email || ''); }
     setOrders(ordersRes.data || []);
     setClickCount(clicksRes.count || clicksRes.data?.length || 0);
   };
@@ -132,24 +127,6 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
     return () => { if (channel) portalClient.removeChannel(channel); };
   }, [sellerId, portalClient]);
   const metrics = useMemo(() => orders.reduce((result, row) => { const quantity = Number(row.quantity || 1); result.sales += Number(row.sell_price || 0) * quantity; result.profit += (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * quantity; result.quantity += quantity; return result; }, { sales: 0, profit: 0, quantity: 0 }), [orders]);
-
-  const saveShopName = async (event) => {
-    event.preventDefault();
-    const nextName = shopNameDraft.trim();
-    if (!nextName || nameChanged || nameSaving) return;
-    setNameSaving(true);
-    setNameError('');
-    const { error } = await portalClient.rpc('update_own_seller_display_name', { new_display_name: nextName });
-    setNameSaving(false);
-    if (error) {
-      setNameError(error.message || 'Could not update the shop name.');
-      return;
-    }
-    setShopName(nextName);
-    setProfile((current) => current ? { ...current, display_name: nextName } : current);
-    setNameChanged(true);
-    setShowNameModal(false);
-  };
 
   const freeTrafficClaimed = Boolean(profile?.free_traffic_claimed_at);
   const freeTrafficAmount = Number(profile?.free_traffic_amount || 0);
@@ -203,7 +180,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
               </label>
             )}
           </div>
-          <div className="seller-profile-copy"><div><h2>{shopName}</h2><button type="button" disabled={nameChanged} onClick={() => { setShopNameDraft(shopName); setShowNameModal(true); }} aria-label="Edit shop name">✎</button></div><span>Credit Score {profile?.credit_score ?? 100}</span></div>
+          <div className="seller-profile-copy"><div><h2>{shopName}</h2></div><span>Credit Score {profile?.credit_score ?? 100}</span></div>
           <button className="seller-wallet-btn" type="button" onClick={() => setSellerView('wallet')}>Wallet</button>
         </section>
         {avatarError && <p className="seller-avatar-error">{avatarError}</p>}
@@ -226,7 +203,6 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         <nav className="seller-help-links"><button type="button" onClick={() => setSellerView('invite')}><b>♙＋</b><span>Invite</span></button><button type="button" onClick={() => setSellerView('feedback')}><b>⌕</b><span>Feedback</span></button><button type="button" onClick={() => setSellerView('service')}><b>♧</b><span>Service</span></button></nav>
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
-      {showNameModal && <div className="shop-name-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !nameSaving && setShowNameModal(false)}><form className="shop-name-modal" onSubmit={saveShopName}><div className="shop-name-modal-header"><button type="button" disabled={nameSaving} onClick={() => setShowNameModal(false)}>×</button><h2>Edit Shop Name</h2><span /></div><div className="shop-name-modal-body"><p>Shop name can only be changed once</p><input autoFocus maxLength="40" value={shopNameDraft} onChange={(event) => setShopNameDraft(event.target.value)} aria-label="Shop name" disabled={nameSaving} />{nameError && <p className="shop-name-error">{nameError}</p>}<button type="submit" disabled={!shopNameDraft.trim() || nameSaving}>{nameSaving ? 'Saving…' : 'Confirm'}</button></div></form></div>}
       {showTrafficModal && <div className="seller-traffic-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !trafficBusy && setShowTrafficModal(false)}><section className="seller-traffic-modal" role="dialog" aria-modal="true" aria-labelledby="traffic-modal-title"><button className="seller-traffic-modal-close" type="button" disabled={trafficBusy} onClick={() => setShowTrafficModal(false)}>×</button>{trafficCelebration ? <div className="seller-traffic-celebration"><div className="seller-confetti" aria-hidden="true">🎉</div><h2 id="traffic-modal-title">Congratulations!</h2><p>You have won</p><strong>{trafficCelebration.toLocaleString()} traffic</strong><button className="seller-collect-traffic" type="button" onClick={() => setShowTrafficModal(false)}>Done</button></div> : <><div className="seller-package-art" aria-hidden="true"><span>☆</span><b>🎁</b></div><h2 id="traffic-modal-title">Free Traffic Package</h2><p className="seller-traffic-description">Claim your one-time random traffic award.</p>{trafficError && <p className="seller-traffic-error">{trafficError}</p>}{freeTrafficClaimed ? <div className="seller-traffic-status"><strong>Package already claimed</strong><span>You received {freeTrafficAmount.toLocaleString()} traffic.</span></div> : <button className="seller-collect-traffic" type="button" disabled={trafficBusy || previewMerchant} onClick={collectTraffic}>{trafficBusy ? 'Claiming…' : 'Claim'}</button>}<div className="seller-traffic-rules"><strong>Rules</strong><span>1. You can claim this package once per account.</span><span>2. You will receive a random traffic award from 1 to 3,000.</span></div></>}</section></div>}
     </main>
   );

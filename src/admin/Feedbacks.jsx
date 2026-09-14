@@ -17,8 +17,8 @@ export default function Feedbacks() {
     localStorage.setItem('seller_feedback_tickets', JSON.stringify(tickets));
   }, [tickets]);
   useEffect(() => {
-    adminSupabase.from('feedback_tickets').select('*,profiles(display_name)').order('created_at',{ascending:false}).then(({data}) => {
-      if (data?.length) setTickets(data.map((item) => ({id:item.id,title:item.title,seller:item.profiles?.display_name||'Seller',type:item.type,date:new Date(item.created_at).toLocaleDateString(),status:item.status,message:item.message})));
+    adminSupabase.from('feedback_tickets').select('*,profiles(display_name,email)').order('created_at',{ascending:false}).then(({data}) => {
+      if (data?.length) setTickets(data.map((item) => ({id:item.id,title:item.title,seller:item.profiles?.email||'Seller',type:item.type,date:new Date(item.created_at).toLocaleDateString(),status:item.status,message:item.message})));
     });
   }, []);
 

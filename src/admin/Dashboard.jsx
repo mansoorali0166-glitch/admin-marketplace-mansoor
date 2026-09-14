@@ -129,7 +129,7 @@ export default function Dashboard({ onOpenMerchants }) {
       setRecentUsers(
         sellers.slice(0, 10).map((s) => ({
           id: s.id.slice(0, 8).toUpperCase(),
-          store: s.display_name || s.email.split('@')[0],
+          store: s.email,
           email: s.email,
           agent: agentById[s.agent_id] || '—',
           registerTime: new Date(s.created_at).toLocaleString('en-US', {

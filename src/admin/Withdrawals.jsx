@@ -10,7 +10,7 @@ export default function Withdrawals() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const loadRequests = useCallback(async () => {
     const { data, error } = await adminSupabase.from('withdrawals').select('*,profiles(display_name,email)').order('created_at',{ascending:false});
-    if (!error) setRequests((data || []).map((item)=>({id:item.id,seller:item.profiles?.display_name||'Seller',email:item.profiles?.email||'',amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
+    if (!error) setRequests((data || []).map((item)=>({id:item.id,seller:item.profiles?.email||'Seller',email:item.profiles?.email||'',amount:Number(item.amount),method:item.method,account:item.account_details,date:new Date(item.created_at).toLocaleString(),status:item.status,reason:item.rejection_reason})));
   }, []);
 
   useEffect(() => {

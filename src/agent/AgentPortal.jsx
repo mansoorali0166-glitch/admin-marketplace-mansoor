@@ -729,7 +729,7 @@ function AgentRechargeOrders() {
     setOrders(
       (data || []).map((row) => ({
         id: row.id,
-        merchant: row.seller?.display_name || row.seller?.email || "Seller",
+        merchant: row.seller?.email || "Seller",
         sellerId: row.seller_id,
         amount: Number(row.amount),
         status: row.status,
@@ -1059,7 +1059,7 @@ function AgentWithdrawOrders() {
     setWithdrawals(
       (data || []).map((row) => ({
         id: row.id,
-        seller: row.seller?.display_name || row.seller?.email || "Seller",
+        seller: row.seller?.email || "Seller",
         sellerId: row.seller_id,
         amount: Number(row.amount),
         method: row.method,
@@ -1252,7 +1252,7 @@ function AgentSellerChat() {
     setSellers(
       (data || []).map((item) => ({
         id: item.id,
-        name: item.display_name || item.email.split("@")[0],
+        name: item.email || "Seller",
       })),
     );
   };
@@ -1278,7 +1278,7 @@ function AgentSellerChat() {
         return {
           id: item.id,
           sellerId: partnerId,
-          partnerName: partner?.role === "admin" ? "Super Admin" : partner?.display_name || partner?.email || "Seller",
+          partnerName: partner?.role === "admin" ? "Super Admin" : partner?.email || "Seller",
           partnerRole: partner?.role || "seller",
           mine: item.sender_id === auth.user.id,
           text: item.body,
@@ -2458,7 +2458,7 @@ function AgentBuyerMessages() {
       buyer: buyer.name,
       buyerId: buyer?.id,
       phone: buyer?.phone || "•••",
-      seller: seller.display_name || seller.email,
+      seller: seller.email,
       sellerId: seller.id,
       message: form.message.trim(),
       productId: product?.id || null,
@@ -2693,7 +2693,7 @@ function AgentBuyerMessages() {
                 <option value="">— Select seller —</option>
                 {sellerOptions.map((seller) => (
                   <option key={seller.id} value={seller.id}>
-                    {seller.display_name || seller.email}
+                    {seller.email}
                   </option>
                 ))}
               </select>
@@ -3128,7 +3128,7 @@ function AgentFeedbacks() {
         setTickets(
           data.map((row) => ({
             id: row.id,
-            seller: row.seller?.display_name || row.seller?.email || "Seller",
+            seller: row.seller?.email || "Seller",
             type: row.type,
             title: row.title,
             content: row.message,
@@ -3849,7 +3849,7 @@ function AgentOrderList() {
         setSellers(
           (data || []).map((item) => ({
             id: item.id,
-            name: item.display_name || item.email.split("@")[0],
+            name: item.email || "Seller",
           })),
         );
       });
@@ -4176,7 +4176,7 @@ function useLiveAgentOrders() {
           return {
           dbId: row.id,
           id: row.order_no || row.id,
-          seller: seller?.display_name || seller?.email || row.seller_name || "Seller",
+          seller: seller?.email || row.seller_name || "Seller",
           sellerId: row.seller_id,
           product: row.product_name || "Product",
           customer: row.customer_name || "Customer",
@@ -5095,10 +5095,8 @@ function AgentMerchantList() {
               userId: profile.id,
               id: profile.id.slice(0, 8).toUpperCase(),
               avatar: profile.avatar_url || "",
-              initial: (profile.display_name ||
-                profile.email ||
-                "S")[0].toUpperCase(),
-              name: profile.display_name || profile.email.split("@")[0],
+              initial: (profile.email || "S")[0].toUpperCase(),
+              name: profile.email || "Seller",
               email: profile.email,
               balance: formatUsd(total),
               frozen: `${formatUsd(frozen.get(id) || 0)} frozen`,
@@ -5435,11 +5433,7 @@ function AgentApplications() {
         {visible.map((item) => (
           <article key={item.id}>
             <div>
-              <strong>{item.name}</strong>
-              <span>
-                {item.email} · {item.phone || "No phone"}
-              </span>
-              <small>{item.address}</small>
+              <strong>{item.email}</strong>
               <time>{new Date(item.created_at).toLocaleString()}</time>
             </div>
             <em className={item.status.toLowerCase()}>{item.status}</em>

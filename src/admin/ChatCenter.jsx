@@ -69,7 +69,7 @@ export default function ChatCenter() {
         setAllSellers(
           sellersData.map((s) => ({
             id: s.id,
-            name: s.display_name || s.email || "Seller",
+            name: s.email || "Seller",
             email: s.email,
           })),
         );
@@ -125,7 +125,7 @@ export default function ChatCenter() {
           return {
             id: profile.id,
             userId: profile.id,
-            name: profile.display_name || profile.email || "Seller",
+            name: profile.email || "Seller",
             email: profile.email,
             message: latest?.body || "No messages yet",
             meta: "Customer Service Channel",

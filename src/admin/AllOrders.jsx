@@ -31,7 +31,7 @@ const mapOrder = (row, profileMap) => {
   return {
     dbId: row.id,
     id: String(row.order_no || row.order_number || row.id),
-    seller: seller?.display_name || seller?.email || row.seller_name || row.customer_name || "Seller",
+    seller: seller?.email || row.seller_name || row.customer_name || "Seller",
     product: row.product_name || row.product || "Product",
     price: `$ ${(sellPrice * quantity).toFixed(2)}`,
     profit: `$ ${((sellPrice - costPrice) * quantity).toFixed(2)}`,
