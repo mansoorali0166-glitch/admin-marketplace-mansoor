@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './SellerBankCard.css';
 import { sellerSupabase } from '../shared/supabase';
 
@@ -15,11 +15,23 @@ export default function SellerEWallet({ onBack, client = sellerSupabase, sellerI
   const [form, setForm] = useState({
     name: saved.name || '',
     walletName: saved.walletName || '',
-    walletEmail: saved.walletEmail || 'agent100@gmail.com',
+    walletEmail: saved.walletEmail || '',
     walletNumber: saved.walletNumber || '',
     tradePassword: '',
   });
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const effectiveId = sellerId || (await client.auth.getUser()).data.user?.id;
+      if (!effectiveId) return;
+      const { data, error } = await client.from('payment_methods').select('details').eq('seller_id', effectiveId).eq('method_type', 'e_wallet').maybeSingle();
+      if (!active || error || !data?.details) return;
+      setForm((current) => ({ ...current, ...data.details, tradePassword: '' }));
+    };
+    load();
+    return () => { active = false; };
+  }, [client, sellerId]);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   const submit = async (event) => {

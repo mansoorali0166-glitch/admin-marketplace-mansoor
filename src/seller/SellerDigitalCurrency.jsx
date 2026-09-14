@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './SellerBankCard.css';
 import { sellerSupabase } from '../shared/supabase';
 
@@ -15,10 +15,22 @@ export default function SellerDigitalCurrency({ onBack, client = sellerSupabase,
   const [form, setForm] = useState({
     trc20: saved.trc20 || '',
     erc20: saved.erc20 || '',
-    bep20: saved.bep20 || 'agent100@gmail.com',
+    bep20: saved.bep20 || '',
     tradePassword: '',
   });
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const effectiveId = sellerId || (await client.auth.getUser()).data.user?.id;
+      if (!effectiveId) return;
+      const { data, error } = await client.from('payment_methods').select('details').eq('seller_id', effectiveId).eq('method_type', 'digital_currency').maybeSingle();
+      if (!active || error || !data?.details) return;
+      setForm((current) => ({ ...current, ...data.details, tradePassword: '' }));
+    };
+    load();
+    return () => { active = false; };
+  }, [client, sellerId]);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   const submit = async (event) => {

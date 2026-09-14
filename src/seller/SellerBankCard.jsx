@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './SellerBankCard.css';
 import { sellerSupabase } from '../shared/supabase';
 
@@ -13,14 +13,26 @@ const loadBankCard = () => {
 export default function SellerBankCard({ onBack, client = sellerSupabase, sellerId }) {
   const saved = loadBankCard();
   const [form, setForm] = useState({
-    name: saved.name || 'Khan',
-    bankName: saved.bankName || 'HBL',
-    branchName: saved.branchName || '1234',
-    cardNumber: saved.cardNumber || '911 0919 019101',
-    country: saved.country || 'Pakistan',
+    name: saved.name || '',
+    bankName: saved.bankName || '',
+    branchName: saved.branchName || '',
+    cardNumber: saved.cardNumber || '',
+    country: saved.country || '',
     tradePassword: '',
   });
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const effectiveId = sellerId || (await client.auth.getUser()).data.user?.id;
+      if (!effectiveId) return;
+      const { data, error } = await client.from('payment_methods').select('details').eq('seller_id', effectiveId).eq('method_type', 'bank_card').maybeSingle();
+      if (!active || error || !data?.details) return;
+      setForm((current) => ({ ...current, ...data.details, tradePassword: '' }));
+    };
+    load();
+    return () => { active = false; };
+  }, [client, sellerId]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const submit = async (event) => {
