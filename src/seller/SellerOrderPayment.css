@@ -16,3 +16,25 @@
 .seller-payment-modal input { box-sizing: border-box; width: 100%; padding: 14px; border: 1px solid #d8dee8; border-radius: 10px; font: inherit; }
 .seller-confirm-pay { width: 100%; margin-top: 20px; padding: 15px; border: 0; border-radius: 10px; background: #fb3c5c; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
 .seller-confirm-pay:disabled { opacity: .65; cursor: wait; }
+.seller-order-details { width: min(460px, 100%); max-height: calc(100vh - 30px); overflow-y: auto; border-radius: 16px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .25); }
+.seller-order-details > header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 58px; padding: 0 16px; border-bottom: 1px solid #edf0f4; }
+.seller-order-details > header h2 { margin: 0; font-size: 18px; }
+.seller-order-details > header button { justify-self: start; border: 0; background: transparent; color: #475569; font-size: 30px; cursor: pointer; }
+.seller-detail-status { display: flex; justify-content: space-between; padding: 15px 18px; background: #f27667; color: #fff; font-size: 14px; }
+.seller-detail-number { padding: 14px 18px 4px; font-size: 13px; overflow-wrap: anywhere; }
+.seller-detail-product { display: flex; align-items: center; gap: 18px; min-height: 105px; padding: 8px 18px 14px; }
+.seller-detail-product img { width: 84px; height: 84px; object-fit: contain; }
+.seller-detail-product div { display: flex; flex: 1; justify-content: space-between; gap: 12px; }
+.seller-detail-product div span { align-self: flex-end; color: #475569; }
+.seller-detail-prices { display: grid; grid-template-columns: repeat(3, 1fr); padding: 18px 10px; background: #faf7f8; text-align: center; }
+.seller-detail-prices div { display: flex; flex-direction: column; gap: 5px; }
+.seller-detail-prices span { color: #64748b; font-size: 13px; }
+.seller-detail-prices div:last-child { color: #e94a64; }
+.seller-order-details dl { margin: 14px 18px; padding-top: 10px; border-top: 10px solid #f4f5f6; }
+.seller-order-details dl div { display: flex; gap: 5px; margin: 10px 0; font-size: 13px; }
+.seller-order-details dt { flex: 0 0 auto; }
+.seller-order-details dd { margin: 0; overflow-wrap: anywhere; }
+.seller-detail-pay { width: calc(100% - 36px); margin: 4px 18px 20px; padding: 14px; border: 0; border-radius: 5px; background: #ed425e; color: #fff; font-size: 16px; cursor: pointer; }
+.seller-detail-payment-form { padding: 20px; }
+.seller-detail-payment-form label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; }
+.seller-detail-payment-form input { box-sizing: border-box; width: 100%; padding: 14px; border: 1px solid #d8dee8; border-radius: 10px; font: inherit; }
