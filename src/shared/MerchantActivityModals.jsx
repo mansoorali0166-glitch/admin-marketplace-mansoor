@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './MerchantActivityModals.css';
+import { buildMerchantOrders } from './merchantOrderBatch';
 
 export default function MerchantActivityModals({ client, merchant, action, onClose, onChanged, openAction, actor = 'Admin' }) {
   const [tab, setTab] = useState(action === 'Order' ? 'Orders' : action === 'Manage' ? 'Balance' : 'Overview');
@@ -23,7 +24,9 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [orderStatus, setOrderStatus] = useState('all');
   const [logSearch, setLogSearch] = useState('');
   const [logCategory, setLogCategory] = useState('all');
-  const [orderDraft, setOrderDraft] = useState({ product_id: '', product_name: '', buyer_id: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' });
+  const [orderItems, setOrderItems] = useState([]);
+  const [orderBuyerId, setOrderBuyerId] = useState('');
+  const [pickingProducts, setPickingProducts] = useState(false);
 
   const load = async () => {
     if (!merchant?.userId) return;
@@ -108,28 +111,25 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     await load();
     onChanged?.();
   };
-  const selectOrderProduct = (productId) => {
-    const product = showcaseProducts.find((item) => String(item.id) === productId);
-    setOrderDraft((current) => ({
-      ...current,
-      product_id: productId,
-      product_name: product?.name || product?.product_code || '',
-      sell_price: product ? String(product.sell_price ?? '') : current.sell_price,
-      cost_price: product ? String(product.cost_price ?? '') : current.cost_price,
-    }));
+  const toggleOrderProduct = (productId) => {
+    setOrderItems(current => current.some(item => item.productId === productId)
+      ? current.filter(item => item.productId !== productId)
+      : [...current, { productId, quantity: 1 }]);
   };
-  const selectOrderBuyer = (buyerId) => {
-    const buyer = buyers.find((item) => String(item.id) === buyerId);
-    setOrderDraft((current) => ({
-      ...current,
-      buyer_id: buyerId,
-      customer_name: buyer?.name || '',
-      shipping_address: buyer
-        ? [buyer.address, buyer.city, buyer.state, buyer.postal, buyer.country].filter(Boolean).join(', ')
-        : current.shipping_address,
-    }));
+  const createOrder = async (event) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setMessage('');
+    try {
+      const payload = buildMerchantOrders({ sellerId: merchant.userId, items: orderItems, products: showcaseProducts, buyers, buyerId: orderBuyerId });
+      const { error } = await client.from('orders').insert(payload);
+      if (error) throw error;
+      setOrderItems([]); setOrderBuyerId(''); setPickingProducts(false); setShowOrderForm(false);
+      setMessage(`${payload.length} order(s) created successfully.`);
+      await load(); onChanged?.();
+    } catch (error) { setMessage(error.message || 'Could not create orders.'); }
+    finally { setBusy(false); }
   };
-  const createOrder = async (event) => { event.preventDefault(); setBusy(true); const payload = { seller_id: merchant.userId, order_no: `MH${Date.now()}`, product_name: orderDraft.product_name.trim(), customer_name: orderDraft.customer_name.trim(), shipping_address: orderDraft.shipping_address.trim(), quantity: Number(orderDraft.quantity || 1), sell_price: Number(orderDraft.sell_price || 0), cost_price: Number(orderDraft.cost_price || 0), status: orderDraft.status }; const { error } = await client.from('orders').insert(payload); setBusy(false); if (error) return setMessage(error.message); setOrderDraft({ product_id: '', product_name: '', buyer_id: '', customer_name: '', shipping_address: '', quantity: 1, sell_price: '', cost_price: '', status: 'Pending Ship' }); setShowOrderForm(false); setMessage('Order created successfully.'); await load(); onChanged?.(); };
   const updateOrderStatus = async (id, status) => { setBusy(true); const { error } = await client.from('orders').update({ status }).eq('id', id).eq('seller_id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); };
   const exportLogs = () => { const fields = ['created_at','category','action','actor','ip','device','details']; const csv = [fields.join(','), ...visibleLogs.map(row => fields.map(key => `"${String(row[key] || '').replace(/"/g,'""')}"`).join(','))].join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${merchant.name || 'seller'}-activity.csv`; link.click(); URL.revokeObjectURL(url); };
   const updateShop = async (values) => { setBusy(true); const { error } = await client.from('profiles').update(values).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); onChanged?.(); onClose(); };
@@ -189,22 +189,23 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     {tab === 'Click Logs' && <section className="manage-table-card"><div className="manage-table-tools"><input placeholder="Search action / IP / device..." value={logSearch} onChange={(e)=>setLogSearch(e.target.value)}/><select value={logCategory} onChange={(e)=>setLogCategory(e.target.value)}>{['all','login','logout','product click','order','balance','password','faq','api','automation','account'].map(x=><option value={x} key={x}>{x === 'all' ? 'All categories' : x}</option>)}</select><button type="button" onClick={exportLogs}>⇩ Export CSV</button></div><div className="manage-table-scroll"><div className="activity-table manage-clicks"><div className="activity-row head"><span>DATE &amp; TIME</span><span>CATEGORY</span><span>ACTION</span><span>ACTOR</span><span>IP ADDRESS</span><span>DEVICE / BROWSER</span><span>DETAILS</span></div>{visibleLogs.map(row=><div className="activity-row" key={row.id}><time>{new Date(row.created_at).toLocaleString()}</time><b>{row.category}</b><span>{row.action}</span><span>{row.actor}</span><span>{row.ip||'—'}</span><span>{row.device||'—'}</span><span>{row.details||'—'}</span></div>)}{!visibleLogs.length&&<p className="activity-empty">No activity logs.</p>}</div></div></section>}
     {tab === 'Overview' && <div className="overview-panels"><Panel title="WALLET & BALANCES" items={[['AVAILABLE',merchant.balance],['FROZEN','$0.00'],['SETTLED','$0.00'],['UNSETTLED','$0.00'],['ACTIVE LOCKS',`$${locks.filter(x=>x.status==='Active').reduce((s,x)=>s+Number(x.amount||0),0).toFixed(2)}`],['TOTAL REVENUE',`$${totals.revenue.toFixed(2)}`]]}/><Panel title="PERFORMANCE" items={[['TOTAL ORDERS',orders.length],['COMPLETED',totals.completed],['TOTAL PROFIT',`$${totals.profit.toFixed(2)}`],['CLICK COUNT',clicks.length]]}/><div className="store-controls"><h4>STORE CONTROLS</h4><button onClick={() => updateShop({ showcase_visible: !(profile?.showcase_visible !== false) })}>◉ Showcase {profile?.showcase_visible === false ? 'Hidden' : 'Visible'}</button><button onClick={() => updateShop({ traffic_enabled: !(profile?.traffic_enabled !== false) })}>⌁ Traffic {profile?.traffic_enabled === false ? 'Off' : 'On'}</button><button className="orange" onClick={() => updateShop({ shop_locked: true })}>♙ Lock Shop</button><button className="red" onClick={() => updateShop({ allow_login: false })}>⊘ Suspend Account</button></div><div className="quick-actions"><h4>QUICK ACTIONS</h4>{['Balance','Lock','Logs','Payment','Reset Pwd','Edit','Risk Control','Login','Showcase','Add Clicks','Stop Clicks','Click Logs','Lock Shop'].map((item) => <button key={item} onClick={() => openAction?.(item)}>{item}</button>)}</div></div>}
     {tab === 'Orders' && <div className="merchant-orders-tab"><div className="manage-table-tools order-tools"><input placeholder="Search orders..." value={orderSearch} onChange={(e)=>setOrderSearch(e.target.value)}/><select value={orderStatus} onChange={(e)=>setOrderStatus(e.target.value)}>{['all','Pending Ship','Pending Receive','Shipped','Completed','Refund','Cancelled'].map(x=><option value={x} key={x}>{x === 'all' ? 'All statuses' : x}</option>)}</select><button type="button" className="new-merchant-order" onClick={() => setShowOrderForm(!showOrderForm)}>＋ Create Order</button></div>{showOrderForm && <form className="merchant-order-form" onSubmit={createOrder}>
-  <select required value={orderDraft.product_id} onChange={(e)=>selectOrderProduct(e.target.value)}>
-    <option value="">— Select product from showcase —</option>
-    {showcaseProducts.map((product) => <option key={product.id} value={product.id}>{product.name || product.product_code} · ${Number(product.sell_price || 0).toFixed(2)}</option>)}
-  </select>
-  {!showcaseProducts.length && <p className="activity-empty">This seller has no on-shelf products in their showcase yet.</p>}
-  <select required value={orderDraft.buyer_id} onChange={(e)=>selectOrderBuyer(e.target.value)}>
-    <option value="">— Select virtual buyer —</option>
-    {buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.phone ? ` · ${buyer.phone}` : ''}</option>)}
-  </select>
-  {!buyers.length && <p className="activity-empty">No virtual buyers found. Add one under Virtual Buyers first.</p>}
-  <input placeholder="Shipping address" value={orderDraft.shipping_address} onChange={(e)=>setOrderDraft({...orderDraft,shipping_address:e.target.value})}/>
-  <input type="number" min="1" placeholder="Quantity" value={orderDraft.quantity} onChange={(e)=>setOrderDraft({...orderDraft,quantity:e.target.value})}/>
-  <input type="number" min="0" step="0.01" required placeholder="Sell price" value={orderDraft.sell_price} onChange={(e)=>setOrderDraft({...orderDraft,sell_price:e.target.value})}/>
-  <input type="number" min="0" step="0.01" placeholder="Cost price" value={orderDraft.cost_price} onChange={(e)=>setOrderDraft({...orderDraft,cost_price:e.target.value})}/>
-  <select value={orderDraft.status} onChange={(e)=>setOrderDraft({...orderDraft,status:e.target.value})}>{['Pending Ship','Pending Receive','Shipped','Completed','Refund','Cancelled'].map(x=><option key={x}>{x}</option>)}</select>
-  <button disabled={busy || !orderDraft.product_id}>Create Order</button>
+  <div className="merchant-batch-orders">
+    <button type="button" disabled={busy} onClick={() => setPickingProducts(!pickingProducts)}>＋ Add Products</button>
+    {pickingProducts && <div className="merchant-product-picker">
+      {showcaseProducts.map(product => <label key={product.id}><input type="checkbox" disabled={busy} checked={orderItems.some(item => item.productId === String(product.id))} onChange={() => toggleOrderProduct(String(product.id))} /><span>{product.name || product.product_code}</span><strong>${Number(product.sell_price || 0).toFixed(2)}</strong></label>)}
+      {!showcaseProducts.length && <p>This seller has no on-shelf showcase products.</p>}
+      <button type="button" onClick={() => setPickingProducts(false)}>Done</button>
+    </div>}
+    {orderItems.map(item => {
+      const product = showcaseProducts.find(product => String(product.id) === item.productId);
+      return <div className="merchant-order-item" key={item.productId}><strong>{product?.name || product?.product_code || 'Unavailable product'}</strong><label>Quantity<input type="number" min="1" step="1" required disabled={busy} value={item.quantity} onChange={event => setOrderItems(current => current.map(row => row.productId === item.productId ? {...row, quantity: event.target.value} : row))} /></label><button type="button" disabled={busy} onClick={() => toggleOrderProduct(item.productId)}>Remove</button></div>;
+    })}
+    {!orderItems.length && <p>Add one or more products to create orders.</p>}
+    <label>Virtual buyer<select disabled={busy} value={orderBuyerId} onChange={event => setOrderBuyerId(event.target.value)}><option value="">Random virtual buyer</option>{buyers.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.phone ? ` · ${buyer.phone}` : ''}</option>)}</select></label>
+    {!buyers.length && <p>Create a virtual buyer before creating orders.</p>}
+    <p>Prices and shipping details are filled automatically. Each product creates an order. With no buyer selected, a random existing buyer is chosen for each order.</p>
+    <button type="submit" disabled={busy || !orderItems.length || !buyers.length}>{busy ? 'Creating…' : 'Create Orders'}</button>
+  </div>
 </form>}{message && <p className="activity-message">{message}</p>}<div className="manage-table-scroll"><div className="order-management-table"><div className="order-management-row head"><span>ORDER</span><span>PRODUCT</span><span>AMOUNT</span><span>STATUS</span><span>SHIPPING</span><span>DATE</span><span>ACTIONS</span></div>{visibleOrders.map(row=><div className="order-management-row" key={row.id}><b>{row.order_no||row.id}</b><span>{row.product_name||'—'}</span><strong>${(Number(row.sell_price||0)*Number(row.quantity||1)).toFixed(2)}</strong><span>{row.status||'—'}</span><span>{row.shipping_address||'—'}</span><time>{new Date(row.created_at).toLocaleString()}</time><select value={row.status} disabled={busy} onChange={(e)=>updateOrderStatus(row.id,e.target.value)}>{['Pending Ship','Pending Receive','Shipped','Completed','Refund','Cancelled'].map(x=><option key={x}>{x}</option>)}</select></div>)}{!visibleOrders.length&&<p className="activity-empty">No orders found.</p>}</div></div></div>} 
     {tab === 'Txns' && <SimpleRows rows={txns} empty="No transactions found." render={(row)=><><b>{row.type}</b><span>{row.note || '—'}</span><strong>${Number(row.amount||0).toFixed(2)}</strong><time>{new Date(row.created_at).toLocaleString()}</time></>}/>} 
     {tab === 'Locks' && <SimpleRows rows={locks} empty="No balance locks." render={(row)=><><b>${Number(row.amount||0).toFixed(2)}</b><span>{row.reason}</span><span>{row.status}</span><time>{new Date(row.created_at).toLocaleString()}</time></>}/>} 
