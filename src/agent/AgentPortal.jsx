@@ -5074,8 +5074,9 @@ function AgentMerchantList() {
         rechargeRows,
         withdrawalRows,
       );
+      const now = Date.now();
       const frozen = (lockRows || [])
-        .filter((row) => String(row.status).toLowerCase() === "active")
+        .filter((row) => String(row.status).toLowerCase() === "active" && (!row.lock_until || new Date(row.lock_until).getTime() > now))
         .reduce((map, row) => {
           const id = rowSellerId(row);
           if (!id) return map;
@@ -5091,6 +5092,7 @@ function AgentMerchantList() {
           .map((profile) => {
             const id = String(profile.id);
             const total = balances.has(id) ? balances.get(id) : 0;
+            const frozenBalance = frozen.get(id) || 0;
             return {
               userId: profile.id,
               id: profile.id.slice(0, 8).toUpperCase(),
@@ -5098,8 +5100,8 @@ function AgentMerchantList() {
               initial: (profile.email || "S")[0].toUpperCase(),
               name: profile.email || "Seller",
               email: profile.email,
-              balance: formatUsd(total),
-              frozen: `${formatUsd(frozen.get(id) || 0)} frozen`,
+              balance: formatUsd(Math.max(0, total - frozenBalance)),
+              frozen: `${formatUsd(frozenBalance)} frozen`,
               credit: profile.credit_score ?? 100,
               status: profile.allow_login === false ? "Suspended" : "Active",
               shopLocked: profile.shop_locked === true,
