@@ -21,6 +21,7 @@ export default function MerchantControlModals({ client, merchant, action, onClos
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [productError, setProductError] = useState('');
   const [savingProduct, setSavingProduct] = useState(false);
+  const [savingShelfProductId, setSavingShelfProductId] = useState('');
 
   useEffect(() => {
     if (!client || !merchant?.userId) return;
@@ -34,10 +35,10 @@ export default function MerchantControlModals({ client, merchant, action, onClos
       })));
     }
     if (action === 'Risk Control') client.from('profiles').select('allow_login,allow_withdraw,bank_card_locked').eq('id', merchant.userId).maybeSingle().then(({ data }) => data && setRisk({ allowLogin: data.allow_login !== false, allowWithdraw: data.allow_withdraw !== false, bankCardLocked: !!data.bank_card_locked }));
-    if (action === 'Showcase') client.from('showcase_products').select('id,on_shelf,products(id,name,product_code,sku,image_url,sell_price)').eq('seller_id', merchant.userId).then(({ data }) => setProducts((data || []).map((row) => ({ ...row.products, on_shelf: row.on_shelf }))));
+    if (action === 'Showcase') client.from('showcase_products').select('id,on_shelf,products(id,name,product_code,sku,image_url,sell_price)').eq('seller_id', merchant.userId).then(({ data }) => setProducts((data || []).map((row) => ({ ...row.products, showcaseId: row.id, on_shelf: row.on_shelf }))));
   }, [action, client, merchant?.userId]);
 
-  const reloadShowcaseProducts = () => client.from('showcase_products').select('id,on_shelf,products(id,name,product_code,sku,image_url,sell_price)').eq('seller_id', merchant.userId).then(({ data }) => setProducts((data || []).map((row) => ({ ...row.products, on_shelf: row.on_shelf }))));
+  const reloadShowcaseProducts = () => client.from('showcase_products').select('id,on_shelf,products(id,name,product_code,sku,image_url,sell_price)').eq('seller_id', merchant.userId).then(({ data }) => setProducts((data || []).map((row) => ({ ...row.products, showcaseId: row.id, on_shelf: row.on_shelf }))));
 
   const openProductCatalog = async () => {
     setAddingProduct(true);
@@ -60,6 +61,17 @@ export default function MerchantControlModals({ client, merchant, action, onClos
     await reloadShowcaseProducts();
     setCatalogProducts((current) => current.filter((product) => product.id !== productId));
     setMessage('Product added to the merchant showcase.');
+  };
+
+  const updateShowcaseShelf = async (product, onShelf) => {
+    if (product.on_shelf === onShelf) return;
+    setSavingShelfProductId(product.id);
+    setProductError('');
+    const { error } = await client.from('showcase_products').update({ on_shelf: onShelf }).eq('id', product.showcaseId).eq('seller_id', merchant.userId);
+    setSavingShelfProductId('');
+    if (error) return setProductError(error.message);
+    setProducts((current) => current.map((item) => item.id === product.id ? { ...item, on_shelf: onShelf } : item));
+    onChanged?.();
   };
 
   const run = async (work) => {
@@ -113,7 +125,7 @@ export default function MerchantControlModals({ client, merchant, action, onClos
     {action === 'Risk Control' && <form className="merchant-control-modal" onSubmit={saveRisk}><Header title="Risk Control" icon="♢" /><div className="risk-row"><span>Allow Login</span><Toggle checked={risk.allowLogin} onChange={(value) => setRisk({ ...risk, allowLogin: value })} /></div><div className="risk-row"><span>Allow Withdraw</span><Toggle checked={risk.allowWithdraw} onChange={(value) => setRisk({ ...risk, allowWithdraw: value })} /></div><div className="risk-row"><span>Lock Bank Card</span><Toggle checked={risk.bankCardLocked} onChange={(value) => setRisk({ ...risk, bankCardLocked: value })} /></div>{message && <p className="control-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button className="purple" disabled={busy}>Confirm</button></footer></form>}
     {action === 'Kick' && <section className="merchant-control-modal small"><Header title="Force Logout" /><p className="control-copy">Immediately invalidates all active refresh sessions for this merchant.</p>{message && <p className="control-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="red" disabled={busy} onClick={forceLogout}>Force Logout</button></footer></section>}
     {action === 'Login' && <section className="merchant-control-modal small"><Header title="Login as Merchant" /><p className="control-copy">Open this merchant's dashboard directly in this tab. You can return to your portal afterward.</p><footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="dark" onClick={loginPreview}>Login as Merchant</button></footer></section>}
-    {action === 'Showcase' && !addingProduct && <section className="merchant-control-modal showcase"><Header title="Merchant Showcase" /><p className="showcase-user"><span>User:</span> {merchant.email}</p><div className="control-products showcase-products"><table><thead><tr><th>Product No</th><th>Image</th><th>Product Name</th><th>Price (USD)</th><th>Status</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td data-label="Product No">{product.product_code || product.sku || '—'}</td><td data-label="Image"><img src={product.image_url} alt={product.name || product.product_code || ''} /></td><td className="showcase-product-name" data-label="Product Name">{product.name || product.product_code || product.sku || '—'}</td><td data-label="Price (USD)">${Number(product.sell_price || 0).toFixed(2)}</td><td data-label="Status"><span className={`showcase-status ${product.on_shelf ? 'on-shelf' : 'off-shelf'}`}>{product.on_shelf ? 'On Shelf' : 'Off Shelf'}</span></td></tr>)}</tbody></table>{!products.length && <div className="control-empty"><i>◇</i><p>No products in showcase.</p></div>}</div>{message && <p className="control-success">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="button" onClick={openProductCatalog}>＋ Add Product</button></footer></section>}
+    {action === 'Showcase' && !addingProduct && <section className="merchant-control-modal showcase"><Header title="Merchant Showcase" /><p className="showcase-user"><span>User:</span> {merchant.email}</p><div className="control-products showcase-products"><table><thead><tr><th>Product No</th><th>Image</th><th>Product Name</th><th>Price (USD)</th><th>Status</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td data-label="Product No">{product.product_code || product.sku || '—'}</td><td data-label="Image"><img src={product.image_url} alt={product.name || product.product_code || ''} /></td><td className="showcase-product-name" data-label="Product Name">{product.name || product.product_code || product.sku || '—'}</td><td data-label="Price (USD)">${Number(product.sell_price || 0).toFixed(2)}</td><td data-label="Status"><select className="showcase-status-select" aria-label={`Shelf status for ${product.name || product.product_code || product.sku || 'product'}`} value={product.on_shelf ? 'on-shelf' : 'off-shelf'} disabled={savingShelfProductId === product.id} onChange={(event) => updateShowcaseShelf(product, event.target.value === 'on-shelf')}><option value="on-shelf">On Shelf</option><option value="off-shelf">Off Shelf</option></select></td></tr>)}</tbody></table>{!products.length && <div className="control-empty"><i>◇</i><p>No products in showcase.</p></div>}</div>{productError && <p className="control-error">{productError}</p>}{message && <p className="control-success">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="button" onClick={openProductCatalog}>＋ Add Product</button></footer></section>}
     {action === 'Showcase' && addingProduct && <section className="merchant-control-modal showcase"><Header title="Add Existing Product" /><p className="control-copy">Choose a product from the global showcase to add to this merchant.</p><div className="control-products product-picker">{loadingCatalog && <div className="control-empty"><p>Loading products…</p></div>}{!loadingCatalog && catalogProducts.filter((product) => !products.some((selected) => selected.id === product.id)).map((product) => <article key={product.id}><img src={product.image_url} alt={product.name || ''} /><div><strong>{product.product_code || product.name}</strong><span>{product.name} · {product.category || 'Other'}</span><b>${Number(product.sell_price || 0).toFixed(2)}</b></div><button type="button" disabled={savingProduct} onClick={() => addExistingProduct(product.id)}>＋ Add</button></article>)}{!loadingCatalog && !catalogProducts.filter((product) => !products.some((selected) => selected.id === product.id)).length && <div className="control-empty"><p>All available products are already in this merchant's showcase.</p></div>}</div>{productError && <p className="control-error">{productError}</p>}{message && <p className="control-success">{message}</p>}<footer><button type="button" onClick={() => { setAddingProduct(false); setProductError(''); setMessage(''); }}>Back to Showcase</button></footer></section>}
   </div>;
 }

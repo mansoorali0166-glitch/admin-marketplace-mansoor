@@ -237,21 +237,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.showcase-status {
-  display: inline-block;
-  padding: 4px 9px;
+.merchant-control-modal .showcase-status-select {
+  width: auto;
+  min-width: 100px;
+  margin: 0;
+  padding: 6px 26px 6px 9px;
+  border: 1px solid #c9e9d1;
   border-radius: 999px;
+  background: #ecfdf3;
+  color: #278647;
   font-size: 11px;
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.2;
 }
-.showcase-status.on-shelf {
-  background: #ecfdf3;
-  color: #39a65a;
-}
-.showcase-status.off-shelf {
-  background: #f2f4f7;
-  color: #667085;
+.merchant-control-modal .showcase-status-select:disabled {
+  cursor: wait;
+  opacity: .6;
 }
 .control-products article {
   display: flex;
@@ -385,5 +386,8 @@
   }
   .showcase-products .showcase-product-name {
     white-space: normal;
+  }
+  .merchant-control-modal .showcase-status-select {
+    width: auto;
   }
 }
