@@ -5149,6 +5149,7 @@ function AgentMerchantList() {
     "Freeze",
     "Unfreeze",
     "Payment",
+    "Withdrawals",
     "✎ Edit",
     "◉ Risk",
     "Order",

@@ -1,4 +1,4 @@
-const FINANCE_ACTIONS = new Set(["Balance", "Freeze", "Unfreeze", "Logs", "Payment"]);
+const FINANCE_ACTIONS = new Set(["Balance", "Freeze", "Unfreeze", "Logs", "Payment", "Withdrawals"]);
 const CONTROL_ACTIONS = new Set([
   "Reset Pwd",
   "Kick",
