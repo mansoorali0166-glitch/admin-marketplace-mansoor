@@ -14,3 +14,4 @@
 .manual-buyer-mode p { margin: 10px 0 0; color: #64748b; font-size: 13px; }
 .manual-buyer-mode ~ .merchant-orders-tab .manual-order-actions > div:nth-child(2) { display: none; }
 .manual-buyer-mode ~ .merchant-orders-tab .manual-buyer-note { display: none; }
+.merchant-order-history-list{display:grid;max-height:55vh;overflow:auto}.merchant-order-history-list article{display:grid;grid-template-columns:minmax(180px,2fr) 90px 120px 150px;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid #e2e8f0;color:#334155}.merchant-order-history-list article div{display:grid;gap:4px}.merchant-order-history-list article div span,.merchant-order-history-list time{color:#64748b;font-size:13px}.order-history-modal header p{margin:4px 0 0;color:#64748b}@media(max-width:650px){.merchant-order-history-list article{grid-template-columns:1fr 1fr}.merchant-order-history-list time{text-align:right}}
