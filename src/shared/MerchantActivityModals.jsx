@@ -27,6 +27,8 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const [logCategory, setLogCategory] = useState('all');
   const [orderItems, setOrderItems] = useState([]);
   const [orderBuyerIds, setOrderBuyerIds] = useState([]);
+  const [orderBuyerId, setOrderBuyerId] = useState('random');
+  const [orderBuyerCountry, setOrderBuyerCountry] = useState('');
   const [pickingProducts, setPickingProducts] = useState(false);
   const [pickingBuyers, setPickingBuyers] = useState(false);
 
@@ -119,6 +121,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
       : [...current, { productId, quantity: 1 }]);
   };
   const toggleOrderBuyer = (buyerId) => {
+    setOrderBuyerId('selected');
     setOrderBuyerIds((current) => current.includes(buyerId) ? current.filter((id) => id !== buyerId) : [...current, buyerId]);
   };
   const createOrder = async (event) => {
@@ -126,10 +129,10 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     if (busy) return;
     setBusy(true); setMessage('');
     try {
-      const payload = buildMerchantOrders({ sellerId: merchant.userId, items: orderItems, products: showcaseProducts, buyers, buyerIds: orderBuyerIds });
+      const payload = buildMerchantOrders({ sellerId: merchant.userId, items: orderItems, products: showcaseProducts, buyers, buyerId: orderBuyerId, buyerIds: orderBuyerId === 'selected' ? orderBuyerIds : [], buyerCountry: orderBuyerCountry });
       const { error } = await client.from('orders').insert(payload);
       if (error) throw error;
-      setOrderItems([]); setOrderBuyerIds([]); setPickingProducts(false); setPickingBuyers(false); setShowOrderForm(false);
+      setOrderItems([]); setOrderBuyerIds([]); setOrderBuyerId('random'); setOrderBuyerCountry(''); setPickingProducts(false); setPickingBuyers(false); setShowOrderForm(false);
       setMessage(`${payload.length} order(s) created successfully.`);
       await load(); onChanged?.();
     } catch (error) { setMessage(error.message || 'Could not create orders.'); }
@@ -152,7 +155,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     await load(); onChanged?.(); onClose();
   };
   if (!merchant || !action) return null;
-  const Header = ({ title }) => <header><div className="activity-identity"><b>{merchant.name?.[0]?.toUpperCase()}</b><div><h3>{title}</h3><p>{merchant.email}</p></div></div><button type="button" onClick={onClose}>×</button></header>;
+  const Header = ({ title }) => <><header><div className="activity-identity"><b>{merchant.name?.[0]?.toUpperCase()}</b><div><h3>{title}</h3><p>{merchant.email}</p></div></div><button type="button" onClick={onClose}>×</button></header>{action === 'Order' && <div className="manual-buyer-mode"><label>Buyer assignment<select disabled={busy} value={orderBuyerId} onChange={(event) => { setOrderBuyerId(event.target.value); if (event.target.value !== 'random_country') setOrderBuyerCountry(''); }}><option value="random">Random buyers</option><option value="random_country">Random buyers from country</option><option value="selected">Selected buyers</option></select></label>{orderBuyerId === 'random_country' && <label>Buyer country<select required disabled={busy} value={orderBuyerCountry} onChange={(event) => setOrderBuyerCountry(event.target.value)}><option value="">— Select a country —</option>{buyerCountries.map(country => <option key={country} value={country}>{country}</option>)}</select></label>}{orderBuyerId === 'selected' && <button type="button" disabled={busy} onClick={() => setPickingBuyers(true)}>Select buyers {orderBuyerIds.length ? `(${orderBuyerIds.length})` : ''}</button>}<p>{orderBuyerId === 'random_country' ? 'Each product uses a different buyer from the selected country.' : orderBuyerId === 'selected' ? 'Each product is ordered for every selected buyer.' : 'Each product uses a different random buyer.'}</p></div>}</>;
   if (action === 'Add Clicks') return <div className="merchant-activity-overlay"><form className="merchant-activity-modal compact" onSubmit={adjustClicks}><Header title="Adjust Traffic Clicks" /><select aria-label="Click adjustment type" value={clickAdjustment} onChange={(e) => { setClickAdjustment(e.target.value); setMessage(''); setSuccessMessage(''); }} style={{ boxSizing: 'border-box', width: '100%', padding: 12, margin: '5px 0', border: '1px solid #dce2ea', borderRadius: 10, background: '#fff' }}><option value="add">Add clicks</option><option value="remove">Remove clicks</option></select><input type="number" min="1" max="10000" required placeholder={`Number of clicks to ${clickAdjustment}`} value={count} onChange={(e) => { setCount(e.target.value); setSuccessMessage(''); }} /><input placeholder="Reason or source label (optional)" value={source} onChange={(e) => { setSource(e.target.value); setSuccessMessage(''); }} />{busy && <p role="status" aria-live="polite" style={{ color: '#2563eb', fontSize: 12 }}>◌ Processing click adjustment…</p>}{successMessage && <p role="status" aria-live="polite" style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 10, fontSize: 13 }}>{successMessage}</p>}{message && <p className="activity-error">{message}</p>}<footer><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button disabled={busy}>{busy ? 'Processing…' : clickAdjustment === 'add' ? 'Add Clicks' : 'Remove Clicks'}</button></footer></form></div>;
   if (action === 'Click Logs') {
     const batchMap = new Map();
@@ -189,6 +192,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
   const detailsDrawer = action === 'Details';
   const orderOnly = action === 'Order';
   const agentOrderControls = orderOnly && actor.toLowerCase() === 'agent';
+  const buyerCountries = [...new Set(buyers.map(buyer => String(buyer.country || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const tabs = managing ? [['Balance',txns.length],['Orders',orders.length],['Click Scripts',0],['Click Logs',clicks.length]] : [['Overview',1],['Orders',orders.length],['Txns',txns.length],['Locks',locks.length],['Clicks',activeClicks.length],['Info',1]];
   return <div className={`merchant-activity-overlay ${managing ? 'manage-workspace-overlay' : ''} ${detailsDrawer ? 'merchant-details-drawer-overlay' : ''} ${orderOnly ? 'order-workspace-overlay' : ''}`}><section className={`merchant-activity-modal details ${managing ? 'manage-workspace' : ''} ${detailsDrawer ? 'merchant-details-drawer' : ''} ${orderOnly ? 'manual-order-workspace' : ''}`}>{managing ? <><button type="button" className="manage-back" onClick={onClose}>← Back</button><div className="manage-merchant-header"><div><h2>{merchant.name} {profile?.traffic_enabled === false && <small>CLICKS PAUSED</small>}</h2><p>{merchant.email} · {profile?.referral_code || merchant.id}</p></div><div className="manage-action-bar"><button onClick={() => openAction?.('Balance')}>＄ Adjust Balance</button><button onClick={() => openAction?.('Reset Pwd')}>⚿ Reset Password</button><button onClick={() => openAction?.('Lock Account')}>▣ Lock Account</button><button onClick={() => openAction?.('Login')}>↪ Login as Seller</button><button onClick={() => openAction?.(profile?.traffic_enabled === false ? 'Resume Clicks' : 'Stop Clicks')}>◉ {profile?.traffic_enabled === false ? 'Resume' : 'Stop'} Clicks</button><button onClick={() => openAction?.('Add Clicks')}>⌁ Add Clicks</button><button onClick={() => setTab('Click Logs')}>〽 Click Logs</button><button className="danger" onClick={() => openAction?.('Lock Shop')}>▣ Lock Shop</button></div></div></> : <Header title={orderOnly ? 'Manual Order' : merchant.name} />}{!orderOnly && <nav>{tabs.map(([name,total]) => <button type="button" className={tab === name ? 'active' : ''} onClick={() => setTab(name)} key={name}>{name} {!managing && name !== 'Overview' && name !== 'Info' ? `(${total})` : ''}</button>)}</nav>}
     {tab === 'Balance' && <div className="manage-balance"><div className="manage-stat-grid">{[['AVAILABLE BALANCE',merchant.balance],['PENDING BALANCE','$0.00'],['TOTAL EARNINGS',`$${totals.revenue.toFixed(2)}`],['WITHDRAWN','$0.00'],['FROZEN BALANCE',`$${locks.filter(x=>x.status==='Active').reduce((s,x)=>s+Number(x.amount||0),0).toFixed(2)}`]].map(([a,b])=><article key={a}><span>{a}</span><strong>{b}</strong></article>)}</div><section className="manage-bank"><h3>▱ Bank Account</h3><p>No bank account linked yet.</p></section><section className="manage-history"><header><h3>Transaction History</h3><button type="button" onClick={() => openAction?.('Balance')}>＋ Add / Deduct</button></header><SimpleRows rows={txns} empty="No transactions yet." render={(row)=><><time>{new Date(row.created_at).toLocaleString()}</time><b>{row.type}</b><strong>${Number(row.amount||0).toFixed(2)}</strong><span>{row.note||'—'}</span></>}/></section></div>}

@@ -5,3 +5,9 @@
 .order-management-table.order-only-table .order-management-row > span:last-child {
   color: #94a3b8;
 }
+
+.manual-buyer-mode { margin: 0 22px 14px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 12px; background: #f8fafc; }
+.manual-buyer-mode label { display: grid; gap: 7px; margin-bottom: 12px; color: #334155; font-size: 13px; font-weight: 700; }
+.manual-buyer-mode select { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; color: #0f172a; }
+.manual-buyer-mode > button { min-height: 42px; padding: 0 16px; border: 0; border-radius: 8px; background: #2f67eb; color: #fff; font-weight: 700; cursor: pointer; }
+.manual-buyer-mode p { margin: 10px 0 0; color: #64748b; font-size: 13px; }
