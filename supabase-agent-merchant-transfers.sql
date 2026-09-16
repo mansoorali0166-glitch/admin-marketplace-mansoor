@@ -78,3 +78,6 @@ revoke all on function public.list_transfer_agents() from public;
 revoke all on function public.transfer_merchant_to_agent(uuid, uuid) from public;
 grant execute on function public.list_transfer_agents() to authenticated;
 grant execute on function public.transfer_merchant_to_agent(uuid, uuid) to authenticated;
+
+-- Make the new RPC endpoints available to Supabase's REST schema cache immediately.
+notify pgrst, 'reload schema';
