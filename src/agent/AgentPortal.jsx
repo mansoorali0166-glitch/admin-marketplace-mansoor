@@ -5036,39 +5036,54 @@ const merchantRows = [
 
 function AgentMerchantList() {
   const [merchants, setMerchants] = useState([]);
+  const [transferAgents, setTransferAgents] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
+  const [transferMerchant, setTransferMerchant] = useState(null);
+  const [transferAgentId, setTransferAgentId] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState("");
   const [recentMerchantId, setRecentMerchantId] = useState(null);
   const loadMerchants = async () => {
     setLoading(true);
-    const [profileRes, transactions, lockRows, rechargeRows, withdrawalRows] =
+    const { data: auth } = await agentSupabase.auth.getUser();
+    if (!auth.user) {
+      setMerchants([]);
+      setLoading(false);
+      return;
+    }
+    const [approvedApplicationsRes, transactions, lockRows, rechargeRows, withdrawalRows] =
       await Promise.all([
         agentSupabase
-          .from("profiles")
-          .select(
-            "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url,registration_status",
-          )
-          .eq("role", "seller")
-          .order("created_at", { ascending: false }),
+          .from("merchant_applications")
+          .select("seller_id")
+          .eq("agent_id", auth.user.id)
+          .eq("status", "Approved"),
         fetchWalletTransactions(agentSupabase),
         fetchPagedRows(agentSupabase, "balance_locks"),
         fetchPagedRows(agentSupabase, "recharge_requests"),
         fetchPagedRows(agentSupabase, "withdrawals"),
       ]);
-    if (profileRes.error) {
-      const retry = await agentSupabase
+    if (!approvedApplicationsRes.error) {
+      const sellerIds = (approvedApplicationsRes.data || []).map((row) => row.seller_id);
+      if (!sellerIds.length) {
+        setMerchants([]);
+        setLoading(false);
+        return;
+      }
+      const profileRes = await agentSupabase
         .from("profiles")
         .select(
           "id,email,display_name,created_at,credit_score,allow_login,shop_locked,avatar_url,registration_status",
         )
         .eq("role", "seller")
+        .eq("agent_id", auth.user.id)
+        .eq("registration_status", "Approved")
+        .in("id", sellerIds)
         .order("created_at", { ascending: false });
-      if (!retry.error) profileRes.data = retry.data;
-      profileRes.error = retry.error;
-    }
-    if (!profileRes.error) {
+      if (!profileRes.error) {
       const balances = walletTotalsBySeller(
         transactions,
         rechargeRows,
@@ -5113,7 +5128,8 @@ function AgentMerchantList() {
             };
           }),
       );
-    }
+      }
+    } else setMerchants([]);
     setLoading(false);
   };
   useEffect(() => {
@@ -5138,6 +5154,29 @@ function AgentMerchantList() {
     if (modal?.merchant?.userId) setRecentMerchantId(modal.merchant.userId);
     loadMerchants();
   };
+  const openTransfer = async (merchant) => {
+    setTransferMerchant(merchant);
+    setTransferAgentId("");
+    setTransferMessage("");
+    setTransferAgents([]);
+    const { data, error } = await agentSupabase.rpc("list_transfer_agents");
+    if (error) setTransferMessage(error.message);
+    else setTransferAgents(data || []);
+  };
+  const transfer = async (event) => {
+    event.preventDefault();
+    if (!transferMerchant || !transferAgentId || transferBusy) return;
+    setTransferBusy(true);
+    setTransferMessage("");
+    const { error } = await agentSupabase.rpc("transfer_merchant_to_agent", {
+      target_seller_id: transferMerchant.userId,
+      target_agent_id: transferAgentId,
+    });
+    setTransferBusy(false);
+    if (error) return setTransferMessage(error.message);
+    setTransferMerchant(null);
+    await loadMerchants();
+  };
   const actionsForMerchant = (merchant) => [
     "Balance",
     "Reset Pwd",
@@ -5155,6 +5194,7 @@ function AgentMerchantList() {
     "✎ Edit",
     "◉ Risk",
     "Order",
+    "Transfer Merchant",
     "Click Logs",
   ];
   return (
@@ -5163,8 +5203,7 @@ function AgentMerchantList() {
         <div>
           <h2>Merchant List</h2>
           <p>
-            Active merchants registered with your code <strong>P516326U</strong>
-            . {visible.length} of {merchants.length} shown
+            Merchants you have approved. {visible.length} of {merchants.length} shown
           </p>
         </div>
         <button
@@ -5248,8 +5287,9 @@ function AgentMerchantList() {
                   type="button"
                   className={`tone-${index % 8}`}
                   key={action}
-                  onClick={() =>
-                    setModal({
+                  onClick={() => action === "Transfer Merchant"
+                    ? openTransfer(merchant)
+                    : setModal({
                       merchant,
                       action: normalizeMerchantAction(action),
                       kind: merchantActionKind(action),
@@ -5321,6 +5361,17 @@ function AgentMerchantList() {
             })
           }
         />
+      )}
+      {transferMerchant && (
+        <div className="agent-transfer-overlay" onMouseDown={(event) => event.target === event.currentTarget && !transferBusy && setTransferMerchant(null)}>
+          <form className="agent-transfer-modal" onSubmit={transfer}>
+            <header><div><h3>Transfer Merchant</h3><p>Move <strong>{transferMerchant.name}</strong> to another agent.</p></div><button type="button" disabled={transferBusy} onClick={() => setTransferMerchant(null)}>×</button></header>
+            <label>Destination agent<select required value={transferAgentId} disabled={transferBusy} onChange={(event) => setTransferAgentId(event.target.value)}><option value="">Select an agent</option>{transferAgents.map((agent) => <option value={agent.agent_id} key={agent.agent_id}>{agent.name}{agent.email ? ` · ${agent.email}` : ""}</option>)}</select></label>
+            {transferMessage && <p className="agent-transfer-message">{transferMessage}</p>}
+            {!transferAgents.length && !transferMessage && <p className="agent-transfer-message">No other eligible agents are available.</p>}
+            <footer><button type="button" disabled={transferBusy} onClick={() => setTransferMerchant(null)}>Cancel</button><button type="submit" disabled={!transferAgentId || transferBusy}>{transferBusy ? "Transferring…" : "Transfer Merchant"}</button></footer>
+          </form>
+        </div>
       )}
     </div>
   );
