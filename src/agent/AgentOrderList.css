@@ -116,6 +116,7 @@
   background: #f2f4f7;
   color: #475467;
 }
+.agent-order-status-select{width:100%;min-width:0;height:30px;padding:0 7px;border:1px solid #d0d5dd;border-radius:7px;background:#fff;color:#344054;font:inherit;font-size:10px;cursor:pointer}.agent-order-status-select:disabled{opacity:.6;cursor:wait}.agent-order-status-select.status-completed{border-color:#a7f3d0;background:#d1fae5;color:#047857}.agent-order-status-select.status-pending-receive{border-color:#fecdd3;background:#fff1f2;color:#e11d48}.agent-order-status-select.status-refund,.agent-order-status-select.status-cancelled,.agent-order-status-select.status-rejected{border-color:#d0d5dd;background:#f2f4f7;color:#475467}.agent-order-list-error{margin:-6px 0 14px;padding:10px 12px;border-radius:8px;background:#fff1f2;color:#be123c;font-size:12px}
 .agent-order-list-empty {
   height: 130px;
   display: grid;

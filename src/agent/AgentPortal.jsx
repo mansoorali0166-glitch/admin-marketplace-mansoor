@@ -3769,6 +3769,8 @@ function AgentOrderList() {
     qty: 1,
   });
   const [busy, setBusy] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (step !== 1 || sellers.length) return;
@@ -3863,6 +3865,26 @@ function AgentOrderList() {
     setBusy(false);
     if (!error) close();
   };
+  const changeStatus = async (order, nextStatus) => {
+    const previousStatus = order.status;
+    setMessage("");
+    setUpdatingId(order.dbId);
+    setOrders((current) => current.map((item) => (
+      item.dbId === order.dbId ? { ...item, status: nextStatus } : item
+    )));
+    const { error } = await agentSupabase
+      .from("orders")
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq("id", order.dbId)
+      .eq("seller_id", order.sellerId);
+    if (error) {
+      setOrders((current) => current.map((item) => (
+        item.dbId === order.dbId ? { ...item, status: previousStatus } : item
+      )));
+      setMessage(`Could not update order ${order.id}: ${error.message}`);
+    }
+    setUpdatingId(null);
+  };
   return (
     <div className="agent-order-list-page">
       <header>
@@ -3884,10 +3906,13 @@ function AgentOrderList() {
         >
           {[
             "All Statuses",
+            "Pending Payment",
+            "Paid",
             "Pending Ship",
             "Pending Receive",
             "Shipped",
             "Completed",
+            "Rejected",
             "Refund",
             "Cancelled",
           ].map((item) => (
@@ -3904,6 +3929,7 @@ function AgentOrderList() {
           />
         </label>
       </div>
+      {message && <p className="agent-order-list-error" role="alert">{message}</p>}
       <section className="agent-order-list-table">
         <div className="agent-order-list-head">
           <span>ORDER NO</span>
@@ -3923,15 +3949,19 @@ function AgentOrderList() {
             <span>{order.qty}</span>
             <strong>${order.sale.toFixed(2)}</strong>
             <strong className="profit">${order.profit.toFixed(2)}</strong>
-            <span>
-              <em
-                className={`status-${String(order.status || "")
-                  .toLowerCase()
-                  .replace(" ", "-")}`}
-              >
-                {order.status}
-              </em>
-            </span>
+            <select
+              className={`agent-order-status-select status-${String(order.status || "")
+                .toLowerCase()
+                .replaceAll(" ", "-")}`}
+              value={order.status || ""}
+              disabled={updatingId === order.dbId}
+              onChange={(event) => changeStatus(order, event.target.value)}
+              aria-label={`Change status for order ${order.id}`}
+            >
+              {agentOrderStatuses.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
             <time>{order.date}</time>
           </article>
         ))}
@@ -4065,6 +4095,7 @@ const agentOrderStatuses = [
   { value: "Pending Payment", label: "Pending Pay" },
   { value: "Paid", label: "Paid" },
   { value: "Pending Ship", label: "Pending Ship" },
+  { value: "Shipped", label: "Shipped" },
   { value: "Pending Receive", label: "Pending Receive" },
   { value: "Completed", label: "Completed" },
   { value: "Rejected", label: "Rejected" },
@@ -4077,6 +4108,7 @@ const agentOrderStatusAliases = {
   "pending payment": "Pending Payment",
   paid: "Paid",
   "pending ship": "Pending Ship",
+  shipped: "Shipped",
   "pending receive": "Pending Receive",
   completed: "Completed",
   rejected: "Rejected",
