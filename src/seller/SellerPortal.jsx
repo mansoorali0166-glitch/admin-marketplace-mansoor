@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './SellerLogin.css';
 import './SellerPortal.css';
 import SellerMessages from './SellerMessages';
@@ -32,7 +32,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [clickCount, setClickCount] = useState(0);
   const [showcaseCount, setShowcaseCount] = useState(null);
   const [portalClient, setPortalClient] = useState(sellerSupabase);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [cropSource, setCropSource] = useState('');
   const [portfolioOpen, setPortfolioOpen] = useState(false);
@@ -124,7 +124,28 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
       : null;
     return () => { if (channel) portalClient.removeChannel(channel); };
   }, [sellerId, portalClient]);
-  const metrics = useMemo(() => orders.reduce((result, row) => { const quantity = Number(row.quantity || 1); result.sales += Number(row.sell_price || 0) * quantity; result.profit += (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * quantity; result.quantity += quantity; return result; }, { sales: 0, profit: 0, quantity: 0 }), [orders]);
+  const metrics = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const start = period === 'Today' ? startOfToday : period === 'This Week' ? startOfWeek : period === 'This Month' ? startOfMonth : null;
+    const paidStatuses = new Set(['paid', 'pending ship', 'pending receive', 'completed']);
+
+    return orders.reduce((result, row) => {
+      const status = String(row.status || '').trim().toLowerCase();
+      const createdAt = row.created_at ? new Date(row.created_at) : null;
+      if (!paidStatuses.has(status) || (start && (!createdAt || createdAt < start))) return result;
+      const quantity = Number(row.quantity || 1);
+      const revenue = Number(row.sell_price || 0) * quantity;
+      const cost = Number(row.cost_price || 0) * quantity;
+      result.sales += revenue;
+      result.profit += revenue - cost;
+      result.quantity += quantity;
+      return result;
+    }, { sales: 0, profit: 0, quantity: 0 });
+  }, [orders, period]);
 
   const freeTrafficClaimed = Boolean(profile?.free_traffic_claimed_at);
   const openPortfolio = () => {
@@ -207,8 +228,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         )}
         <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase ({showcaseCount === null ? '…' : showcaseCount.toLocaleString()})</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
         <button className="seller-traffic-banner seller-exposure-banner" type="button" aria-label="Free Traffic Package" onClick={() => { setTrafficError(''); setShowTrafficModal(true); }}>
-          <span className="seller-exposure-brand">Market<span>Hub</span><br />Shop</span>
-          <span className="seller-exposure-copy"><strong>Help to get <em>Free Traffic</em></strong><small>Give your products <b>more exposure</b></small></span>
+          <span className="seller-exposure-brand">TikTok<br />Shop</span>
+          <span className="seller-exposure-copy"><strong>Help to get <em>Free Traffic</em></strong><small><b>1,000,000</b> of Products Exposed</small></span>
         </button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
         <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Revenue</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
