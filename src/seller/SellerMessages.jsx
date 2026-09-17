@@ -19,7 +19,7 @@ function avatarColor(str = "") {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function Avatar({ name, size = 42 }) {
+function Avatar({ name, image, size = 42 }) {
   return (
     <div
       className="sm-avatar"
@@ -31,9 +31,18 @@ function Avatar({ name, size = 42 }) {
         fontSize: size * 0.38,
       }}
     >
-      {getInitials(name)}
+      {image ? <img src={image} alt="" /> : getInitials(name)}
     </div>
   );
+}
+
+function readBuyerMarker(value) {
+  if (!value?.startsWith("virtual-buyer:")) return null;
+  try {
+    return JSON.parse(decodeURIComponent(value.slice("virtual-buyer:".length)));
+  } catch {
+    return null;
+  }
 }
 
 function formatTime(dateStr) {
@@ -183,19 +192,25 @@ export default function SellerMessages({ client, sellerId, onBack }) {
       const buyerContext =
         explicitBuyerContext ||
         (item.channel === "buyer" ? latestBuyerContext.get(contextKey) || "" : "");
+      const buyerProfile = readBuyerMarker(buyerContext);
       const threadId = `${partnerId}:${item.channel}:${buyerContext}`;
       if (!byPartner.has(threadId)) {
         byPartner.set(threadId, {
           threadId,
           partnerId,
-          partnerName,
+          partnerName: item.channel === "buyer" ? buyerProfile?.name || partnerName : partnerName,
           messages: [],
           channel: item.channel,
           buyerContext: buyerContext || null,
+          buyerProfile,
         });
       }
       const thread = byPartner.get(threadId);
       if (!thread.buyerContext && buyerContext) thread.buyerContext = buyerContext;
+      if (!thread.buyerProfile && buyerProfile) {
+        thread.buyerProfile = buyerProfile;
+        thread.partnerName = buyerProfile.name || thread.partnerName;
+      }
       thread.messages.push({
         id:        item.id,
         mine:      item.sender_id === sellerId,
@@ -342,7 +357,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
                       role="button"
                       onKeyDown={(e) => e.key === "Enter" && setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "buyer" })}
                     >
-                      <Avatar name={thread.partnerName} />
+                      <Avatar name={thread.partnerName} image={thread.buyerProfile?.image} />
                       <div className="sm-thread-info">
                         <div className="sm-thread-row1">
                           <span className="sm-thread-name">{thread.partnerName}</span>
@@ -404,7 +419,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
           >
             {/* Modal Header */}
             <div className="sm-modal-header">
-              <Avatar name={activeThread.partnerName} size={38} />
+              <Avatar name={activeThread.partnerName} image={activeThread.buyerProfile?.image} size={38} />
               <div className="sm-modal-partner">
                 <span className="sm-modal-partner-name">{activeThread.partnerName}</span>
                 <span className="sm-modal-channel">
