@@ -35,9 +35,14 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [cropSource, setCropSource] = useState('');
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const [portfolioBusy, setPortfolioBusy] = useState(false);
+  const [portfolioError, setPortfolioError] = useState('');
+  const [portfolio, setPortfolio] = useState({ name: '', storeName: '', image: '' });
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [trafficBusy, setTrafficBusy] = useState(false);
   const [trafficError, setTrafficError] = useState('');
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const pickShopAvatarFile = async (file) => {
     if (!file) return;
@@ -64,20 +69,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   };
   const confirmShopAvatarCrop = async (croppedDataUrl) => {
     setCropSource('');
-    if (!sellerId) return;
-    setAvatarBusy(true);
-    setAvatarError('');
-    try {
-      const { error } = await portalClient
-        .from('profiles')
-        .update({ avatar_url: croppedDataUrl })
-        .eq('id', sellerId);
-      if (error) throw error;
-      setProfile((current) => ({ ...current, avatar_url: croppedDataUrl }));
-    } catch (err) {
-      setAvatarError(err.message || 'Could not update photo.');
-    }
-    setAvatarBusy(false);
+    setPortfolio((current) => ({ ...current, image: croppedDataUrl }));
   };
 
   const resolvePortalClient = async () => {
@@ -99,16 +91,18 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
       if (id) setSellerId(id);
     }
     if (!id) return;
-    const [profileRes, ordersRes, clicksRes, showcaseRes] = await Promise.all([
+    const [profileRes, ordersRes, clicksRes, showcaseRes, unreadRes] = await Promise.all([
       client.from('profiles').select('*').eq('id', id).maybeSingle(),
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
       client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).neq('source', 'free-traffic-package').not('source', 'like', 'adjustment:remove:%').not('source', 'like', 'adjustment:stop:%'),
       client.from('showcase_products').select('product_id', { count: 'exact', head: true }).eq('seller_id', id),
+      client.from('messages').select('id', { count: 'exact', head: true }).eq('recipient_id', id).is('read_at', null),
     ]);
-    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.email || ''); }
+    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.store_name || profileRes.data.display_name || profileRes.data.email || ''); }
     setOrders(ordersRes.data || []);
     setClickCount(clicksRes.count || clicksRes.data?.length || 0);
     setShowcaseCount(showcaseRes.error ? null : showcaseRes.count);
+    setUnreadMessages(unreadRes.error ? 0 : unreadRes.count || 0);
   };
   useEffect(() => {
     loadSellerData();
@@ -118,6 +112,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_clicks', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'showcase_products', filter: `seller_id=eq.${sellerId}` }, loadSellerData)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${sellerId}` }, loadSellerData)
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${sellerId}` }, (payload) => {
             loadSellerData();
             if (payload.new?.allow_login === false && !previewMerchant) {
@@ -132,6 +127,25 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const metrics = useMemo(() => orders.reduce((result, row) => { const quantity = Number(row.quantity || 1); result.sales += Number(row.sell_price || 0) * quantity; result.profit += (Number(row.sell_price || 0) - Number(row.cost_price || 0)) * quantity; result.quantity += quantity; return result; }, { sales: 0, profit: 0, quantity: 0 }), [orders]);
 
   const freeTrafficClaimed = Boolean(profile?.free_traffic_claimed_at);
+  const openPortfolio = () => {
+    if (previewMerchant) return;
+    setPortfolioError('');
+    setPortfolio({ name: profile?.display_name || '', storeName: profile?.store_name || '', image: profile?.avatar_url || '' });
+    setPortfolioOpen(true);
+  };
+  const savePortfolio = async (event) => {
+    event.preventDefault();
+    if (!sellerId || !portfolio.name.trim() || !portfolio.storeName.trim()) return;
+    setPortfolioBusy(true); setPortfolioError('');
+    const { error } = await portalClient.from('profiles').update({
+      display_name: portfolio.name.trim(), store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null,
+    }).eq('id', sellerId);
+    setPortfolioBusy(false);
+    if (error) { setPortfolioError(error.message || 'Could not save your portfolio.'); return; }
+    setProfile((current) => ({ ...current, display_name: portfolio.name.trim(), store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null }));
+    setShopName(portfolio.storeName.trim());
+    setPortfolioOpen(false);
+  };
   const collectTraffic = async () => {
     if (trafficBusy || freeTrafficClaimed || previewMerchant || !profile) return;
     setTrafficBusy(true);
@@ -161,8 +175,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   return (
     <main className="seller-center-page">
       <div className="seller-center-shell">
-        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>MarketHub Seller Center</h1><div><button type="button" onClick={() => setSellerView('messages')} aria-label="Messages"><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg></button><button type="button" aria-label="Language">◎</button></div></header>
-        <section className="seller-profile-row">
+        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>MarketHub Seller Center</h1><div><button className="seller-message-button" type="button" onClick={() => setSellerView('messages')} aria-label={unreadMessages ? `${unreadMessages} unread messages` : 'Messages'}><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg>{unreadMessages > 0 && <b className="seller-message-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</b>}</button><button type="button" aria-label="Language">◎</button></div></header>
+        <section className="seller-profile-row" onClick={openPortfolio} role={previewMerchant ? undefined : 'button'} tabIndex={previewMerchant ? undefined : 0} onKeyDown={(event) => event.key === 'Enter' && openPortfolio()}>
           <div
             className="seller-avatar-wrap"
             tabIndex={previewMerchant ? -1 : 0}
@@ -180,8 +194,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
               </label>
             )}
           </div>
-          <div className="seller-profile-copy"><div><h2>{shopName}</h2></div><span>Credit Score {profile?.credit_score ?? 100}</span></div>
-          <button className="seller-wallet-btn" type="button" onClick={() => setSellerView('wallet')}>Wallet</button>
+          <div className="seller-profile-copy"><div><h2>{shopName}</h2></div><span>{profile?.display_name || 'Seller'} · Credit Score {profile?.credit_score ?? 100}</span></div>
+          <button className="seller-wallet-btn" type="button" onClick={(event) => { event.stopPropagation(); setSellerView('wallet'); }}>Wallet</button>
         </section>
         {avatarError && <p className="seller-avatar-error">{avatarError}</p>}
         {cropSource && (
@@ -197,8 +211,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           <span className="seller-exposure-copy"><strong>Help to get <em>Free Traffic</em></strong><small>Give your products <b>more exposure</b></small></span>
         </button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
-        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
-        <section className="seller-sales-chart"><h2>Total Sales</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Sales</div></section>
+        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Revenue</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
+        <section className="seller-sales-chart"><h2>Total Profit</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Profit</div></section>
         <nav className="seller-help-links"><button type="button" onClick={() => setSellerView('invite')}><b>♙＋</b><span>Invite</span></button><button type="button" onClick={() => setSellerView('feedback')}><b>⌕</b><span>Feedback</span></button><button type="button" onClick={() => setSellerView('service')}><b>♧</b><span>Service</span></button></nav>
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
@@ -206,18 +220,20 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
         <div className="seller-traffic-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !trafficBusy && setShowTrafficModal(false)}>
           <section className="seller-traffic-modal" role="dialog" aria-modal="true" aria-labelledby="traffic-modal-title">
             <button className="seller-traffic-modal-close" type="button" aria-label="Close" disabled={trafficBusy} onClick={() => setShowTrafficModal(false)}>×</button>
-            <h2 id="traffic-modal-title">Free Traffic Package</h2>
+            <h2 id="traffic-modal-title">Free Traffic Package</h2><div className="seller-package-art" aria-hidden="true"><span>✦</span><b>🎁</b></div><h3>Free Traffic Package</h3><p className="seller-traffic-description">Claim to get 3,000 product exposures</p>
             {freeTrafficClaimed ? (
-              <p className="seller-traffic-success" role="status">Free traffic successfully claimed.</p>
+              <p className="seller-traffic-success" role="status">Already claimed</p>
             ) : (
               <>
                 {trafficError && <p className="seller-traffic-error" role="alert">{trafficError}</p>}
                 <button className="seller-collect-traffic" type="button" disabled={trafficBusy || Boolean(previewMerchant) || !profile} onClick={collectTraffic}>{trafficBusy ? 'Claiming…' : 'Claim'}</button>
               </>
             )}
+            <div className="seller-traffic-rules"><strong>Rules</strong><span>1. You can claim the free traffic package once per month.</span><span>2. After claiming, exposure is added to your products over time.</span><span>3. Traffic from multiple claims can be stacked.</span><span>4. All rights are reserved by the platform.</span></div>
           </section>
         </div>
       )}
+      {portfolioOpen && <div className="seller-portfolio-overlay" onMouseDown={(event) => event.target === event.currentTarget && !portfolioBusy && setPortfolioOpen(false)}><form className="seller-portfolio-modal" onSubmit={savePortfolio}><header><h2>Edit portfolio</h2><button type="button" onClick={() => setPortfolioOpen(false)} aria-label="Close">×</button></header><label className="seller-portfolio-image">{portfolio.image ? <img src={portfolio.image} alt="Portfolio preview" /> : <span>{portfolio.storeName?.charAt(0)?.toUpperCase() || 'S'}</span>}<input type="file" accept="image/*" onChange={uploadShopAvatar} hidden /><b>Change image</b></label><label>Name<input required maxLength="80" value={portfolio.name} onChange={(event) => setPortfolio((current) => ({ ...current, name: event.target.value }))} /></label><label>Store name<input required maxLength="100" value={portfolio.storeName} onChange={(event) => setPortfolio((current) => ({ ...current, storeName: event.target.value }))} /></label>{portfolioError && <p role="alert">{portfolioError}</p>}<footer><button type="button" onClick={() => setPortfolioOpen(false)} disabled={portfolioBusy}>Cancel</button><button disabled={portfolioBusy}>{portfolioBusy ? 'Saving…' : 'Save changes'}</button></footer></form></div>}
     </main>
   );
 }

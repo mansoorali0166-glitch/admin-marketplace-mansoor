@@ -219,10 +219,11 @@ export default function SellerMessages({ client, sellerId, onBack }) {
         imageUrl:  item.image_url,
         date:      new Date(item.created_at).toLocaleString(),
         createdAt: item.created_at,
+        unread: !item.mine && !item.read_at,
       });
     });
     return Array.from(byPartner.values())
-      .map((thread) => ({ ...thread, lastMessage: thread.messages[thread.messages.length - 1] }))
+      .map((thread) => ({ ...thread, lastMessage: thread.messages[thread.messages.length - 1], unreadCount: thread.messages.filter((message) => message.unread).length }))
       .sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt));
   };
 
@@ -249,6 +250,14 @@ export default function SellerMessages({ client, sellerId, onBack }) {
     setMessageError("");
     setReply("");
     if (textareaRef.current) textareaRef.current.style.height = "44px";
+  };
+
+  const openConversation = async (thread, type) => {
+    setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type });
+    const unreadIds = thread.messages.filter((message) => message.unread).map((message) => message.id);
+    if (!unreadIds.length) return;
+    const { error } = await client.from('messages').update({ read_at: new Date().toISOString() }).in('id', unreadIds).eq('recipient_id', sellerId);
+    if (error) setMessageError(`Could not mark messages as read: ${error.message}`);
   };
 
   const handleTextareaInput = (e) => {
@@ -352,16 +361,16 @@ export default function SellerMessages({ client, sellerId, onBack }) {
                   <li key={thread.threadId}>
                     <article
                       className="sm-thread-card"
-                      onClick={() => setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "buyer" })}
+                      onClick={() => openConversation(thread, "buyer")}
                       tabIndex={0}
                       role="button"
-                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "buyer" })}
+                      onKeyDown={(e) => e.key === "Enter" && openConversation(thread, "buyer")}
                     >
                       <Avatar name={thread.partnerName} image={thread.buyerProfile?.image} />
                       <div className="sm-thread-info">
                         <div className="sm-thread-row1">
                           <span className="sm-thread-name">{thread.partnerName}</span>
-                          <span className="sm-thread-time">{formatTime(thread.lastMessage?.createdAt)}</span>
+                          <span className="sm-thread-time">{formatTime(thread.lastMessage?.createdAt)}</span>{thread.unreadCount > 0 && <b className="sm-unread-badge">{thread.unreadCount > 99 ? '99+' : thread.unreadCount}</b>}
                         </div>
                         <p className="sm-thread-preview">
                           {thread.lastMessage?.mine ? "You: " : ""}
@@ -382,16 +391,16 @@ export default function SellerMessages({ client, sellerId, onBack }) {
                   <li key={thread.threadId}>
                     <article
                       className="sm-thread-card"
-                      onClick={() => setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "platform" })}
+                      onClick={() => openConversation(thread, "platform")}
                       tabIndex={0}
                       role="button"
-                      onKeyDown={(e) => e.key === "Enter" && setOpenThread({ threadId: thread.threadId, partnerId: thread.partnerId, type: "platform" })}
+                      onKeyDown={(e) => e.key === "Enter" && openConversation(thread, "platform")}
                     >
                       <Avatar name={thread.partnerName} />
                       <div className="sm-thread-info">
                         <div className="sm-thread-row1">
                           <span className="sm-thread-name">{thread.partnerName}</span>
-                          <span className="sm-thread-time">{formatTime(thread.lastMessage?.createdAt)}</span>
+                          <span className="sm-thread-time">{formatTime(thread.lastMessage?.createdAt)}</span>{thread.unreadCount > 0 && <b className="sm-unread-badge">{thread.unreadCount > 99 ? '99+' : thread.unreadCount}</b>}
                         </div>
                         <p className="sm-thread-preview">
                           {thread.lastMessage?.mine ? "You: " : ""}

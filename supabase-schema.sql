@@ -15,6 +15,7 @@ alter table public.profiles add column if not exists traffic_enabled boolean not
 alter table public.profiles add column if not exists free_traffic_claimed_at timestamptz;
 alter table public.profiles add column if not exists free_traffic_amount integer;
 alter table public.profiles add column if not exists invitation_code_enabled boolean not null default true;
+alter table public.profiles add column if not exists store_name text;
 
 create table if not exists public.merchant_clicks (
   id uuid primary key default gen_random_uuid(),
