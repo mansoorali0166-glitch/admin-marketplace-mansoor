@@ -2149,7 +2149,6 @@ function AgentBuyerMessages() {
     product: "",
     message: "",
   });
-  const [productFilter, setProductFilter] = useState("ordered");
   const [sellerOptions, setSellerOptions] = useState([]);
   const [sendError, setSendError] = useState("");
   const [sending, setSending] = useState(false);
@@ -2203,45 +2202,30 @@ function AgentBuyerMessages() {
     };
   }, []);
   useEffect(() => {
-    if (!form.seller || !form.buyer) {
+    if (!form.seller) {
       setAvailableProducts([]);
       return;
     }
     let active = true;
     const loadProducts = async () => {
-      const buyer = buyers.find((item) => String(item.id) === form.buyer);
-      const [{ data: showcaseRows }, { data: orderRows }] = await Promise.all([
-        agentSupabase
-          .from("showcase_products")
-          .select(
-            "on_shelf,products(id,name,product_code,sku,sell_price,image_url)",
-          )
-          .eq("seller_id", form.seller)
-          .eq("on_shelf", true),
-        agentSupabase
-          .from("orders")
-          .select("product_name")
-          .eq("seller_id", form.seller)
-          .eq("customer_name", buyer?.name || ""),
-      ]);
+      const { data: showcaseRows } = await agentSupabase
+        .from("showcase_products")
+        .select(
+          "on_shelf,products(id,name,product_code,sku,sell_price,image_url)",
+        )
+        .eq("seller_id", form.seller);
       if (!active) return;
-      const orderedNames = new Set(
-        (orderRows || []).map((row) => row.product_name),
-      );
       setAvailableProducts(
         (showcaseRows || [])
           .filter((row) => row.products)
-          .map((row) => ({
-            ...row.products,
-            ordered: orderedNames.has(row.products.name),
-          })),
+          .map((row) => row.products),
       );
     };
     loadProducts();
     return () => {
       active = false;
     };
-  }, [form.seller, form.buyer, buyers]);
+  }, [form.seller]);
   useEffect(() => {
     let active = true;
     let channel;
@@ -2634,43 +2618,15 @@ function AgentBuyerMessages() {
               <span className="buyer-product-label">
                 Product <small>(optional)</small>
               </span>
-              <div className="buyer-product-filter-buttons">
-                <button
-                  type="button"
-                  className={productFilter === "ordered" ? "active" : ""}
-                  onClick={() => {
-                    setProductFilter("ordered");
-                    setForm({ ...form, product: "" });
-                  }}
-                >
-                  Ordered products
-                </button>
-                <button
-                  type="button"
-                  className={productFilter === "unordered" ? "active" : ""}
-                  onClick={() => {
-                    setProductFilter("unordered");
-                    setForm({ ...form, product: "" });
-                  }}
-                >
-                  Not yet ordered products
-                </button>
-              </div>
               <select
                 value={form.product}
                 onChange={(event) =>
                   setForm({ ...form, product: event.target.value })
                 }
-                disabled={!form.buyer || !form.seller}
+                disabled={!form.seller}
               >
                 <option value="">— No product (general conversation) —</option>
-                {availableProducts
-                  .filter((product) =>
-                    productFilter === "ordered"
-                      ? product.ordered
-                      : !product.ordered,
-                  )
-                  .map((product) => (
+                {availableProducts.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.name} · $
                       {Number(product.sell_price || 0).toFixed(2)}
