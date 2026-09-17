@@ -1236,8 +1236,6 @@ function AgentWithdrawOrders() {
 function AgentSellerChat() {
   const [sellers, setSellers] = useState([]);
   const [sellerId, setSellerId] = useState("");
-  const [sellerProducts, setSellerProducts] = useState([]);
-  const [productId, setProductId] = useState("");
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState([]);
   const [thread, setThread] = useState(null);
@@ -1262,7 +1260,7 @@ function AgentSellerChat() {
     if (!auth?.user) return;
     const { data, error } = await agentSupabase
       .from("messages")
-      .select("*,product:products(id,name,product_code,sell_price,image_url)")
+      .select("*")
       .eq("channel", "agent")
       .order("created_at", { ascending: false });
     if (error) console.log("AGENT HISTORY LOAD ERROR:", error);
@@ -1282,8 +1280,6 @@ function AgentSellerChat() {
           partnerRole: partner?.role || "seller",
           mine: item.sender_id === auth.user.id,
           text: item.body,
-          product: item.product,
-          productId: item.product?.id || item.product_id || null,
           date: new Date(item.created_at).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
@@ -1310,26 +1306,6 @@ function AgentSellerChat() {
     return () => agentSupabase.removeChannel(channel);
   }, []);
 
-  useEffect(() => {
-    if (!sellerId) {
-      setSellerProducts([]);
-      setProductId("");
-      return;
-    }
-    agentSupabase
-      .from("showcase_products")
-      .select("on_shelf,products(id,name,product_code,sell_price,image_url)")
-      .eq("seller_id", sellerId)
-      .then(({ data }) => {
-        setSellerProducts(
-          (data || [])
-            .filter((row) => row.on_shelf && row.products)
-            .map((row) => row.products),
-        );
-        setProductId("");
-      });
-  }, [sellerId]);
-
   const sellerName = (id) =>
     sellers.find((item) => item.id === id)?.name || "Seller";
 
@@ -1343,14 +1319,13 @@ function AgentSellerChat() {
       recipient_id: sellerId,
       channel: "agent",
       body: message.trim(),
-      product_id: productId || null,
+      product_id: null,
     });
     if (error) {
       console.log("AGENT CHAT SEND ERROR:", error);
       return;
     }
     setMessage("");
-    setProductId("");
   };
 
   const sendThreadReply = async (event) => {
@@ -1363,7 +1338,7 @@ function AgentSellerChat() {
       recipient_id: thread.sellerId,
       channel: "agent",
       body: threadReply.trim(),
-      product_id: thread.productId || null,
+      product_id: null,
     });
     if (error) return console.log("AGENT CHAT REPLY ERROR:", error);
     setThreadReply("");
@@ -1377,7 +1352,7 @@ function AgentSellerChat() {
         <p>Send messages to your sellers and reply to conversations.</p>
       </header>
       <form className="agent-chat-new" onSubmit={send}>
-        {/* ── Row 1: Merchant + Product ── */}
+        {/* ── Row 1: Merchant ── */}
         <div className="agent-chat-new-selects">
           <small>New Message</small>
           <select
@@ -1392,25 +1367,6 @@ function AgentSellerChat() {
               </option>
             ))}
           </select>
-          {sellerId && (
-            <select
-              value={productId}
-              onChange={(event) => setProductId(event.target.value)}
-            >
-              <option value="">No specific product</option>
-              {sellerProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name || product.product_code} · $
-                  {Number(product.sell_price || 0).toFixed(2)}
-                </option>
-              ))}
-            </select>
-          )}
-          {sellerId && !sellerProducts.length && (
-            <small className="agent-chat-no-products">
-              This seller has no on-shelf products.
-            </small>
-          )}
         </div>
 
         {/* ── Divider ── */}
@@ -1456,15 +1412,6 @@ function AgentSellerChat() {
                   ? `To: ${item.partnerName}`
                   : `From: ${item.partnerName}`}
               </strong>
-              {item.product && (
-                <span className="agent-chat-product-tag">
-                  {item.product.image_url && (
-                    <img src={item.product.image_url} alt="" />
-                  )}
-                  {item.product.name || item.product.product_code} · $
-                  {Number(item.product.sell_price || 0).toFixed(2)}
-                </span>
-              )}
               <p>{item.text}</p>
             </div>
             <aside>
@@ -1476,8 +1423,6 @@ function AgentSellerChat() {
                     sellerId: item.sellerId,
                     partnerName: item.partnerName,
                     partnerRole: item.partnerRole,
-                    productId: item.productId,
-                    product: item.product,
                   })
                 }
               >
@@ -1501,11 +1446,7 @@ function AgentSellerChat() {
             <header>
               <div>
                 <h3>{thread.partnerName || sellerName(thread.sellerId)}</h3>
-                <p>
-                  {thread.product
-                    ? `${thread.product.name || thread.product.product_code} · $${Number(thread.product.sell_price || 0).toFixed(2)}`
-                    : "General conversation · No specific product"}
-                </p>
+                <p>Seller conversation</p>
               </div>
               <button type="button" onClick={() => setThread(null)}>
                 ×
@@ -1514,10 +1455,7 @@ function AgentSellerChat() {
             <div>
               {history
                 .filter(
-                  (item) =>
-                    item.sellerId === thread.sellerId &&
-                    String(item.productId || "general") ===
-                      String(thread.productId || "general"),
+                  (item) => item.sellerId === thread.sellerId,
                 )
                 .slice()
                 .reverse()
@@ -1526,12 +1464,6 @@ function AgentSellerChat() {
                     key={item.id}
                     className={item.mine ? "mine" : item.partnerRole === "admin" ? "admin" : "seller"}
                   >
-                    {item.product && (
-                      <span className="agent-chat-product-tag">
-                        {item.product.name || item.product.product_code} · $
-                        {Number(item.product.sell_price || 0).toFixed(2)}
-                      </span>
-                    )}
                     <p>{item.text}</p>
                     <time>{item.date}</time>
                   </article>
