@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './SellerOrders.css';
 import './SellerOrderPayment.css';
 
@@ -14,11 +14,28 @@ const statuses = [
 ];
 const tabs = ['All', ...statuses.map(({ label }) => label)];
 const aliases = {
-  'pending pay': 'Pending Payment', 'pending payment': 'Pending Payment', paid: 'Paid',
-  'pending ship': 'Pending Ship', 'pending receive': 'Pending Receive', completed: 'Completed',
-  rejected: 'Rejected', cancelled: 'Cancelled', canceled: 'Cancelled', refund: 'Refund', refunded: 'Refund',
+  'pending pay': 'Pending Payment',
+  'pending payment': 'Pending Payment',
+  paid: 'Paid',
+  'pending ship': 'Pending Ship',
+  'pending shipment': 'Pending Ship',
+  shipped: 'Pending Receive',
+  shipping: 'Pending Receive',
+  'pending receive': 'Pending Receive',
+  'pending receipt': 'Pending Receive',
+  completed: 'Completed',
+  complete: 'Completed',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  canceled: 'Cancelled',
+  refund: 'Refund',
+  refunded: 'Refund',
 };
-const normalizeStatus = (status) => aliases[String(status || '').trim().toLowerCase()] || 'Pending Payment';
+const normalizeStatus = (status) => {
+  const raw = String(status || '').trim();
+  const lower = raw.toLowerCase();
+  return aliases[lower] || raw || 'Pending Payment';
+};
 const statusLabel = (status) => statuses.find(({ value }) => value === status)?.label || status;
 
 export default function SellerOrders({ client, sellerId, onBack }) {
@@ -26,10 +43,12 @@ export default function SellerOrders({ client, sellerId, onBack }) {
   const [activeTab, setActiveTab] = useState('All');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [paymentMessage, setPaymentMessage] = useState('');
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [tradePassword, setTradePassword] = useState('');
   const [paying, setPaying] = useState(false);
+  const payingRef = useRef(false);
 
   const refreshOrders = useCallback(async () => {
     if (!client || !sellerId) return;
@@ -73,16 +92,28 @@ export default function SellerOrders({ client, sellerId, onBack }) {
   const visibleOrders = useMemo(() => orders.filter((order) => selectedStatus === 'All' || order.status === selectedStatus), [orders, selectedStatus]);
   const payOrder = async (event) => {
     event.preventDefault();
-    if (!paymentOrder || paying) return;
+    if (!paymentOrder || payingRef.current || paying) return;
+    payingRef.current = true;
     setPaying(true);
-    setMessage('');
-    const { error } = await client.rpc('pay_seller_order', { target_order_id: paymentOrder.dbId, supplied_trade_password: tradePassword });
-    setPaying(false);
-    if (error) return setMessage(error.message);
-    await refreshOrders();
-    setPaymentOrder(null);
-    setTradePassword('');
-    setMessage('Payment successful. Your order is now pending shipment.');
+    setPaymentMessage('');
+    try {
+      const { error } = await client.rpc('pay_seller_order', { target_order_id: paymentOrder.dbId, supplied_trade_password: tradePassword });
+      if (error) {
+        setPaymentMessage(error.message || 'Payment failed.');
+        return;
+      }
+      await refreshOrders();
+      setPaymentOrder(null);
+      setPaymentOpen(false);
+      setTradePassword('');
+      setPaymentMessage('');
+      setMessage('Payment successful. Your order is now pending shipment.');
+    } catch (err) {
+      setPaymentMessage(err.message || 'Payment failed.');
+    } finally {
+      payingRef.current = false;
+      setPaying(false);
+    }
   };
 
   return <main className="seller-orders-page"><div className="seller-orders-shell">
@@ -91,8 +122,8 @@ export default function SellerOrders({ client, sellerId, onBack }) {
     {message && <p className="seller-orders-error" role="alert">{message}</p>}
     <section className="seller-order-list">{visibleOrders.map((order) => {
       const profit = (order.sellPrice - order.costPrice) * order.quantity;
-      return <article className="seller-order-payable" key={order.dbId} onClick={() => { setPaymentOrder(order); setPaymentOpen(false); setMessage(''); }}>{order.status === 'Pending Payment' && <div className="seller-new-order"><b>New Order</b><span>You have a new order. Please pay as soon as possible.</span></div>}<div className="seller-order-heading"><div><span>Order No:</span><strong>{order.id}</strong><time>{order.date}</time></div><b className={`order-${order.status.toLowerCase().replaceAll(' ', '-')}`}>{statusLabel(order.status)}</b></div><div className="seller-order-address"><span>⌾</span><div><strong>{order.customer}</strong><p>{order.address}</p></div></div><div className="seller-order-product">{order.productImage && <img className="seller-order-product-image" src={order.productImage} alt={order.product} />}<div><strong>{order.product}</strong><span>x{order.quantity}</span></div></div><div className="seller-order-prices"><div><strong>${order.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${order.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${profit.toFixed(2)}</strong><span>Profit</span></div></div></article>;
+      return <article className="seller-order-payable" key={order.dbId} onClick={() => { setPaymentOrder(order); setPaymentOpen(false); setMessage(''); setPaymentMessage(''); }}>{order.status === 'Pending Payment' && <div className="seller-new-order"><b>New Order</b><span>You have a new order. Please pay as soon as possible.</span></div>}<div className="seller-order-heading"><div><span>Order No:</span><strong>{order.id}</strong><time>{order.date}</time></div><b className={`order-${order.status.toLowerCase().replaceAll(' ', '-')}`}>{statusLabel(order.status)}</b></div><div className="seller-order-address"><span>⌾</span><div><strong>{order.customer}</strong><p>{order.address}</p></div></div><div className="seller-order-product">{order.productImage && <img className="seller-order-product-image" src={order.productImage} alt={order.product} />}<div><strong>{order.product}</strong><span>x{order.quantity}</span></div></div><div className="seller-order-prices"><div><strong>${order.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${order.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${profit.toFixed(2)}</strong><span>Profit</span></div></div></article>;
     })}{!loading && !visibleOrders.length && <div className="seller-orders-empty">No {activeTab.toLowerCase()} orders found.</div>}</section>
-    {paymentOrder && <div className="seller-payment-overlay"><section className="seller-order-details"><header><button type="button" onClick={() => paymentOpen ? setPaymentOpen(false) : setPaymentOrder(null)}>‹</button><h2>{paymentOpen ? 'Confirm Payment' : 'Order Details'}</h2><span /></header>{!paymentOpen ? <><div className="seller-detail-status"><span>Order Status</span><strong>{statusLabel(paymentOrder.status)}</strong></div><div className="seller-detail-number">Order No: <b>{paymentOrder.id}</b></div><div className="seller-detail-product">{paymentOrder.productImage && <img src={paymentOrder.productImage} alt={paymentOrder.product} />}<div><strong>{paymentOrder.product}</strong><span>x{paymentOrder.quantity}</span></div></div><div className="seller-detail-prices"><div><strong>${paymentOrder.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${paymentOrder.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${((paymentOrder.sellPrice-paymentOrder.costPrice)*paymentOrder.quantity).toFixed(2)}</strong><span>Profit</span></div></div><dl><div><dt>Order No:</dt><dd>{paymentOrder.id}</dd></div><div><dt>Order Time:</dt><dd>{paymentOrder.date}</dd></div><div><dt>Payment Method:</dt><dd>Balance Payment</dd></div><div><dt>Shipping Address:</dt><dd>{paymentOrder.address}</dd></div></dl>{paymentOrder.status === 'Pending Payment' && <button className="seller-detail-pay" type="button" onClick={() => { setPaymentOpen(true); setMessage(''); }}>Pay Now</button>}</> : <form className="seller-detail-payment-form" onSubmit={payOrder}><div className="seller-payment-amount"><span>Order amount</span><strong>${(paymentOrder.costPrice * paymentOrder.quantity).toFixed(2)}</strong></div><label>Trade Password<input autoFocus required type="password" autoComplete="current-password" placeholder="Enter your bank card trade password" value={tradePassword} onChange={(event) => setTradePassword(event.target.value)} /></label>{message && <p className="seller-orders-error" role="alert">{message}</p>}<button className="seller-confirm-pay" disabled={paying}>{paying ? 'Processing Payment…' : 'Click to Confirm Pay'}</button></form>}</section></div>}
+    {paymentOrder && <div className="seller-payment-overlay"><section className="seller-order-details"><header><button type="button" onClick={() => { setPaymentMessage(''); paymentOpen ? setPaymentOpen(false) : setPaymentOrder(null); }}>‹</button><h2>{paymentOpen ? 'Confirm Payment' : 'Order Details'}</h2><span /></header>{!paymentOpen ? <><div className="seller-detail-status"><span>Order Status</span><strong>{statusLabel(paymentOrder.status)}</strong></div><div className="seller-detail-number">Order No: <b>{paymentOrder.id}</b></div><div className="seller-detail-product">{paymentOrder.productImage && <img src={paymentOrder.productImage} alt={paymentOrder.product} />}<div><strong>{paymentOrder.product}</strong><span>x{paymentOrder.quantity}</span></div></div><div className="seller-detail-prices"><div><strong>${paymentOrder.sellPrice.toFixed(2)}</strong><span>Sell Price</span></div><div><strong>${paymentOrder.costPrice.toFixed(2)}</strong><span>Cost Price</span></div><div><strong>${((paymentOrder.sellPrice-paymentOrder.costPrice)*paymentOrder.quantity).toFixed(2)}</strong><span>Profit</span></div></div><dl><div><dt>Order No:</dt><dd>{paymentOrder.id}</dd></div><div><dt>Order Time:</dt><dd>{paymentOrder.date}</dd></div><div><dt>Payment Method:</dt><dd>Balance Payment</dd></div><div><dt>Shipping Address:</dt><dd>{paymentOrder.address}</dd></div></dl>{paymentOrder.status === 'Pending Payment' && <button className="seller-detail-pay" type="button" onClick={() => { setPaymentOpen(true); setMessage(''); setPaymentMessage(''); }}>Pay Now</button>}</> : <form className="seller-detail-payment-form" onSubmit={payOrder}><div className="seller-payment-amount"><span>Order amount</span><strong>${(paymentOrder.costPrice * paymentOrder.quantity).toFixed(2)}</strong></div><label>Trade Password<input autoFocus required type="password" autoComplete="current-password" placeholder="Enter your bank card trade password" value={tradePassword} onChange={(event) => setTradePassword(event.target.value)} /></label>{paymentMessage && <p className="seller-orders-error" role="alert">{paymentMessage}</p>}<button className="seller-confirm-pay" disabled={paying}>{paying ? 'Processing Payment…' : 'Click to Confirm Pay'}</button></form>}</section></div>}
   </div></main>;
 }

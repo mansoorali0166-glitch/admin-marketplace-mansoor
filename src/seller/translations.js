@@ -1,6 +1,6 @@
 export const translations = {
   en: {
-    sellerCenter: "MarketHub Seller Center",
+    sellerCenter: "Seller Center",
     showcase: "Showcase",
     orders: "Orders",
     wallet: "Wallet",
@@ -34,7 +34,7 @@ export const translations = {
     orderNo: "Order No",
   },
   zh: {
-    sellerCenter: "MarketHub 卖家中心",
+    sellerCenter: "卖家中心",
     showcase: "商品展示",
     orders: "订单",
     wallet: "钱包",

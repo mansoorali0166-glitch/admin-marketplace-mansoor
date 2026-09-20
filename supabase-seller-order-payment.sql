@@ -66,7 +66,15 @@ begin
   select * into target_order from public.orders
   where id = target_order_id and seller_id = auth.uid()
   for update;
-  if not found then raise exception 'Order not found.'; end if;
+  if lower(trim(target_order.status)) in ('pending ship', 'paid') and exists(
+    select 1 from public.wallet_transactions where seller_id = auth.uid() and order_id = target_order.id
+  ) then
+    select coalesce(sum(amount), 0) into wallet_balance from public.wallet_transactions where seller_id = auth.uid();
+    return jsonb_build_object('order_id', target_order.id, 'status', target_order.status,
+      'amount', round(target_order.cost_price * target_order.quantity, 2),
+      'balance', wallet_balance, 'already_paid', true);
+  end if;
+
   if lower(trim(target_order.status)) not in ('pending payment', 'pending pay') then
     raise exception 'This order is not awaiting payment.';
   end if;

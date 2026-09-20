@@ -20,8 +20,7 @@ const faqs = [
   ['Can I become a supplier?', 'Supplier applications can be submitted through the Service section.'],
   ['How long does shipping take?', 'Shipping time depends on the product and destination, but is normally shown on each order.'],
 ];
-
-export default function SellerPortal({ onLogout, previewMerchant = null }) {
+export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [period, setPeriod] = useState('Today');
   const [openFaq, setOpenFaq] = useState(null);
   const [shopName, setShopName] = useState(previewMerchant?.email || '');
@@ -29,7 +28,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   const [sellerId, setSellerId] = useState(previewMerchant?.userId || null);
   const [profile, setProfile] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [clickCount, setClickCount] = useState(0);
+  const [clickCounts, setClickCounts] = useState({ 'Today': 0, 'This Week': 0, 'This Month': 0, 'Total': 0 });
   const [showcaseCount, setShowcaseCount] = useState(null);
   const [portalClient, setPortalClient] = useState(sellerSupabase);
   const [avatarBusy] = useState(false);
@@ -91,16 +90,41 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
       if (id) setSellerId(id);
     }
     if (!id) return;
-    const [profileRes, ordersRes, clicksRes, showcaseRes, unreadRes] = await Promise.all([
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const baseClicksQuery = (start) => {
+      let q = client
+        .from('merchant_clicks')
+        .select('id', { count: 'exact', head: true })
+        .eq('seller_id', id)
+        .neq('source', 'free-traffic-package')
+        .not('source', 'like', 'adjustment:remove:%')
+        .not('source', 'like', 'adjustment:stop:%');
+      return start ? q.gte('created_at', start.toISOString()) : q;
+    };
+
+    const [profileRes, ordersRes, todayClicksRes, weekClicksRes, monthClicksRes, totalClicksRes, showcaseRes, unreadRes] = await Promise.all([
       client.from('profiles').select('*').eq('id', id).maybeSingle(),
       client.from('orders').select('*').eq('seller_id', id).order('created_at', { ascending: false }),
-      client.from('merchant_clicks').select('id', { count: 'exact' }).eq('seller_id', id).neq('source', 'free-traffic-package').not('source', 'like', 'adjustment:remove:%').not('source', 'like', 'adjustment:stop:%'),
+      baseClicksQuery(startOfToday),
+      baseClicksQuery(startOfWeek),
+      baseClicksQuery(startOfMonth),
+      baseClicksQuery(null),
       client.from('showcase_products').select('product_id', { count: 'exact', head: true }).eq('seller_id', id),
       client.from('messages').select('id', { count: 'exact', head: true }).eq('recipient_id', id).is('read_at', null),
     ]);
     if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.store_name || profileRes.data.display_name || profileRes.data.email || ''); }
     setOrders(ordersRes.data || []);
-    setClickCount(clicksRes.count || clicksRes.data?.length || 0);
+    setClickCounts({
+      'Today': todayClicksRes.count || 0,
+      'This Week': weekClicksRes.count || 0,
+      'This Month': monthClicksRes.count || 0,
+      'Total': totalClicksRes.count || 0,
+    });
     setShowcaseCount(showcaseRes.error ? null : showcaseRes.count);
     setUnreadMessages(unreadRes.error ? 0 : unreadRes.count || 0);
   };
@@ -196,7 +220,7 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
   return (
     <main className="seller-center-page">
       <div className="seller-center-shell">
-        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>MarketHub Seller Center</h1><div><button className="seller-message-button" type="button" onClick={() => setSellerView('messages')} aria-label={unreadMessages ? `${unreadMessages} unread messages` : 'Messages'}><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg>{unreadMessages > 0 && <b className="seller-message-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</b>}</button><button type="button" aria-label="Language">◎</button></div></header>
+        <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>Seller Center</h1><div><button className="seller-message-button" type="button" onClick={() => setSellerView('messages')} aria-label={unreadMessages ? `${unreadMessages} unread messages` : 'Messages'}><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg>{unreadMessages > 0 && <b className="seller-message-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</b>}</button><button type="button" aria-label="Language">◎</button></div></header>
         <section className="seller-profile-row" onClick={openPortfolio} role={previewMerchant ? undefined : 'button'} tabIndex={previewMerchant ? undefined : 0} onKeyDown={(event) => event.key === 'Enter' && openPortfolio()}>
           <div
             className="seller-avatar-wrap"
@@ -232,8 +256,8 @@ export default function SellerPortal({ onLogout, previewMerchant = null }) {
           <span className="seller-exposure-copy"><strong>Help to get <em>Free Traffic</em></strong><small><b>1,000,000</b> of Products Exposed</small></span>
         </button>
         <div className="seller-period-tabs">{periods.map((item) => <button type="button" key={item} className={period === item ? 'active' : ''} onClick={() => setPeriod(item)}>{item}</button>)}</div>
-        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Revenue</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{clickCount.toLocaleString()}</strong></article></div></section>
-        <section className="seller-sales-chart"><h2>Total Profit</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Profit</div></section>
+        <section className="seller-metrics"><h2>Key Metrics</h2><div className="seller-metric-grid"><article className="sales-card"><span>Total Sales</span><strong>${metrics.sales.toFixed(2)}</strong></article><article><span>Expected Profit</span><strong>${metrics.profit.toFixed(2)}</strong></article><article><span>Order Quantity</span><strong>{metrics.quantity}</strong></article><article><span>{profile?.traffic_enabled === false ? 'Product Clicks · Stopped' : 'Product Clicks'}</span><strong>{(clickCounts[period] ?? 0).toLocaleString()}</strong></article></div></section>
+        <section className="seller-sales-chart"><h2>Total Sales</h2><div className="chart-area"><div className="chart-y"><span>4</span><span>3</span><span>2</span><span>1</span><span>0</span></div><div className="chart-plot"><div className="chart-line">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div><div className="chart-times">{['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00'].map((time) => <span key={time}>{time}</span>)}</div></div></div><div className="chart-legend"><i /> Total Sales</div></section>
         <nav className="seller-help-links"><button type="button" onClick={() => setSellerView('invite')}><b>♙＋</b><span>Invite</span></button><button type="button" onClick={() => setSellerView('feedback')}><b>⌕</b><span>Feedback</span></button><button type="button" onClick={() => setSellerView('service')}><b>♧</b><span>Service</span></button></nav>
         <section className="seller-faq"><h2>FAQ</h2>{faqs.map(([question, answer], index) => <article key={question}><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)}><span>{question}</span><b>{openFaq === index ? '⌄' : '›'}</b></button>{openFaq === index && <p>{answer}</p>}</article>)}</section>
       </div>
