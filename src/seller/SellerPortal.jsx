@@ -9,6 +9,8 @@ import SellerInvite from './SellerInvite';
 import SellerFeedback from './SellerFeedback';
 import SellerService from './SellerService';
 import { adminSupabase, agentSupabase, sellerSupabase } from '../shared/supabase';
+import { readImageFile } from '../shared/avatar';
+import AvatarCropper from '../shared/AvatarCropper';
 
 const periods = ['Today', 'This Week', 'This Month', 'Total'];
 const faqs = [
@@ -32,11 +34,26 @@ const faqs = [
   const [portfolioOpen, setPortfolioOpen] = useState(false);
   const [portfolioBusy, setPortfolioBusy] = useState(false);
   const [portfolioError, setPortfolioError] = useState('');
-  const [portfolio, setPortfolio] = useState({ storeName: '' });
+  const [portfolio, setPortfolio] = useState({ storeName: '', image: '' });
+  const [cropSource, setCropSource] = useState('');
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [trafficBusy, setTrafficBusy] = useState(false);
   const [trafficError, setTrafficError] = useState('');
   const [unreadMessages, setUnreadMessages] = useState(0);
+
+  const selectProfileImage = async (file) => {
+    if (!file) return;
+    setPortfolioError('');
+    try {
+      setCropSource(await readImageFile(file));
+    } catch (error) {
+      setPortfolioError(error.message || 'Could not read that image.');
+    }
+  };
+  const confirmProfileImage = (croppedDataUrl) => {
+    setCropSource('');
+    setPortfolio((current) => ({ ...current, image: croppedDataUrl }));
+  };
 
   const resolvePortalClient = async () => {
     if (!previewMerchant) return sellerSupabase;
@@ -142,7 +159,7 @@ const faqs = [
   const openPortfolio = () => {
     if (previewMerchant) return;
     setPortfolioError('');
-    setPortfolio({ storeName: profile?.store_name || shopName || '' });
+    setPortfolio({ storeName: profile?.store_name || shopName || '', image: profile?.avatar_url || '' });
     setPortfolioOpen(true);
   };
   const savePortfolio = async (event) => {
@@ -150,11 +167,11 @@ const faqs = [
     if (!sellerId || !portfolio.storeName.trim()) return;
     setPortfolioBusy(true); setPortfolioError('');
     const { error } = await portalClient.from('profiles').update({
-      store_name: portfolio.storeName.trim(),
+      store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null,
     }).eq('id', sellerId);
     setPortfolioBusy(false);
     if (error) { setPortfolioError(error.message || 'Could not save your portfolio.'); return; }
-    setProfile((current) => ({ ...current, store_name: portfolio.storeName.trim() }));
+    setProfile((current) => ({ ...current, store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null }));
     setShopName(portfolio.storeName.trim());
     setPortfolioOpen(false);
   };
@@ -227,7 +244,8 @@ const faqs = [
           </section>
         </div>
       )}
-      {portfolioOpen && <div className="seller-portfolio-overlay" onMouseDown={(event) => event.target === event.currentTarget && !portfolioBusy && setPortfolioOpen(false)}><form className="seller-portfolio-modal" onSubmit={savePortfolio}><header><h2>Edit store name</h2><button type="button" onClick={() => setPortfolioOpen(false)} aria-label="Close">×</button></header><label>Store name<input autoFocus required maxLength="100" value={portfolio.storeName} onChange={(event) => setPortfolio((current) => ({ ...current, storeName: event.target.value }))} /></label>{portfolioError && <p role="alert">{portfolioError}</p>}<footer><button type="button" onClick={() => setPortfolioOpen(false)} disabled={portfolioBusy}>Cancel</button><button disabled={portfolioBusy}>{portfolioBusy ? 'Saving…' : 'Save changes'}</button></footer></form></div>}
+      {portfolioOpen && <div className="seller-portfolio-overlay" onMouseDown={(event) => event.target === event.currentTarget && !portfolioBusy && setPortfolioOpen(false)}><form className="seller-portfolio-modal" onSubmit={savePortfolio}><header><h2>Edit profile</h2><button type="button" onClick={() => setPortfolioOpen(false)} aria-label="Close">×</button></header><label className="seller-portfolio-image">{portfolio.image ? <img src={portfolio.image} alt="Profile preview" /> : <span>{portfolio.storeName?.charAt(0)?.toUpperCase() || 'S'}</span>}<input type="file" accept="image/*" onChange={(event) => { selectProfileImage(event.target.files?.[0]); event.target.value = ''; }} hidden /><b>Change image</b></label><label>Store name<input autoFocus required maxLength="100" value={portfolio.storeName} onChange={(event) => setPortfolio((current) => ({ ...current, storeName: event.target.value }))} /></label>{portfolioError && <p role="alert">{portfolioError}</p>}<footer><button type="button" onClick={() => setPortfolioOpen(false)} disabled={portfolioBusy}>Cancel</button><button disabled={portfolioBusy}>{portfolioBusy ? 'Saving…' : 'Save changes'}</button></footer></form></div>}
+      {cropSource && <AvatarCropper src={cropSource} onCancel={() => setCropSource('')} onConfirm={confirmProfileImage} />}
     </main>
   );
 }
