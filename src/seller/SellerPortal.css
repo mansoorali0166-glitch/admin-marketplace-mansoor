@@ -33,3 +33,4 @@
 .seller-exposure-banner .seller-exposure-copy small{font-size:16px;color:#fff;font-weight:700}
 .seller-exposure-banner .seller-exposure-copy b{color:#23d8f5}
 @media(max-width:480px){.seller-exposure-banner{min-height:78px}.seller-exposure-banner .seller-exposure-brand{font-size:18px;padding:12px 6px}.seller-exposure-banner .seller-exposure-copy{padding:10px 8px;gap:4px}.seller-exposure-banner .seller-exposure-copy strong,.seller-exposure-banner .seller-exposure-copy small{font-size:12px}.seller-exposure-banner::after{width:30px;height:30px;right:7px}}
+.seller-profile-copy h2{font-size:23px;font-weight:800;line-height:1.15}.seller-profile-copy span{color:#475569;font-size:13px;font-weight:700}

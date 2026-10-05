@@ -20,13 +20,16 @@ export default function SellerEWallet({ onBack, client = sellerSupabase, sellerI
     tradePassword: '',
   });
   const [notice, setNotice] = useState('');
+  const [bound, setBound] = useState(false);
   useEffect(() => {
     let active = true;
     const load = async () => {
       const effectiveId = sellerId || (await client.auth.getUser()).data.user?.id;
       if (!effectiveId) return;
       const { data, error } = await client.from('payment_methods').select('details').eq('seller_id', effectiveId).eq('method_type', 'e_wallet').maybeSingle();
-      if (!active || error || !data?.details) return;
+      if (!active || error || !data) return;
+      setBound(true);
+      if (!data.details) return;
       setForm((current) => ({ ...current, ...data.details, tradePassword: '' }));
     };
     load();
@@ -36,6 +39,7 @@ export default function SellerEWallet({ onBack, client = sellerSupabase, sellerI
 
   const submit = async (event) => {
     event.preventDefault();
+    if (bound) { setNotice('Only your agent can change your bank account information.'); return; }
     const { tradePassword, ...walletDetails } = form;
     localStorage.setItem('seller_e_wallet', JSON.stringify(walletDetails));
     const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
@@ -49,13 +53,13 @@ export default function SellerEWallet({ onBack, client = sellerSupabase, sellerI
   return <main className="seller-bank-page"><div className="seller-bank-shell">
     <header><button type="button" onClick={onBack}>‹</button><h1>Bind E-Wallet</h1><span /></header>
     {notice && <div className="seller-bank-notice">{notice}</div>}
-    <form onSubmit={submit}>
+    {bound ? <div className="seller-bank-locked"><p>E-wallet is already bound.</p><span>Only your agent can change your bank account information.</span></div> : <form onSubmit={submit}>
       <label>Name<input required placeholder="Enter your real name" value={form.name} onChange={(event) => update('name', event.target.value)} /></label>
       <label>Wallet Name<input required placeholder="e.g. Wise, PayPal" value={form.walletName} onChange={(event) => update('walletName', event.target.value)} /></label>
       <label>Wallet Email<input required type="email" value={form.walletEmail} onChange={(event) => update('walletEmail', event.target.value)} /></label>
       <label>Wallet Number<input required placeholder="Enter wallet number" value={form.walletNumber} onChange={(event) => update('walletNumber', event.target.value)} /></label>
       <label>Trade Password<input required type="password" placeholder="Enter trade password" value={form.tradePassword} onChange={(event) => update('tradePassword', event.target.value)} /></label>
       <button type="submit">Bind E-Wallet</button>
-    </form>
+    </form>}
   </div></main>;
 }

@@ -19,13 +19,16 @@ export default function SellerDigitalCurrency({ onBack, client = sellerSupabase,
     tradePassword: '',
   });
   const [notice, setNotice] = useState('');
+  const [bound, setBound] = useState(false);
   useEffect(() => {
     let active = true;
     const load = async () => {
       const effectiveId = sellerId || (await client.auth.getUser()).data.user?.id;
       if (!effectiveId) return;
       const { data, error } = await client.from('payment_methods').select('details').eq('seller_id', effectiveId).eq('method_type', 'digital_currency').maybeSingle();
-      if (!active || error || !data?.details) return;
+      if (!active || error || !data) return;
+      setBound(true);
+      if (!data.details) return;
       setForm((current) => ({ ...current, ...data.details, tradePassword: '' }));
     };
     load();
@@ -35,6 +38,7 @@ export default function SellerDigitalCurrency({ onBack, client = sellerSupabase,
 
   const submit = async (event) => {
     event.preventDefault();
+    if (bound) { setNotice('Only your agent can change your bank account information.'); return; }
     const { tradePassword, ...addresses } = form;
     localStorage.setItem('seller_digital_currency', JSON.stringify(addresses));
     const { data: auth } = sellerId ? { data: { user: { id: sellerId } } } : await client.auth.getUser();
@@ -48,12 +52,12 @@ export default function SellerDigitalCurrency({ onBack, client = sellerSupabase,
   return <main className="seller-bank-page"><div className="seller-bank-shell">
     <header><button type="button" onClick={onBack}>‹</button><h1>Digital Currency</h1><span /></header>
     {notice && <div className="seller-bank-notice">{notice}</div>}
-    <form onSubmit={submit}>
+    {bound ? <div className="seller-bank-locked"><p>Digital currency is already bound.</p><span>Only your agent can change your bank account information.</span></div> : <form onSubmit={submit}>
       <label>USDT (TRC20)<input placeholder="Enter wallet address" value={form.trc20} onChange={(event) => update('trc20', event.target.value)} /></label>
       <label>USDT (ERC20)<input placeholder="Enter wallet address" value={form.erc20} onChange={(event) => update('erc20', event.target.value)} /></label>
       <label>USDT (BEP20)<input placeholder="Enter wallet address" value={form.bep20} onChange={(event) => update('bep20', event.target.value)} /></label>
       <label>Trade Password<input required type="password" placeholder="Enter trade password" value={form.tradePassword} onChange={(event) => update('tradePassword', event.target.value)} /></label>
       <button type="submit">Save</button>
-    </form>
+    </form>}
   </div></main>;
 }

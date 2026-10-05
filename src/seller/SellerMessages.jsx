@@ -36,6 +36,22 @@ function Avatar({ name, image, size = 42 }) {
   );
 }
 
+function ProductSummary({ product, compact = false }) {
+  if (!product) return null;
+  const name = product.name || product.product_code || product.sku || "Selected product";
+  const price = Number(product.price || 0);
+  return (
+    <div className={"sm-product-summary" + (compact ? " sm-product-summary--compact" : "")}>
+      {product.image ? <img src={product.image} alt="" /> : <span className="sm-product-summary-placeholder">▧</span>}
+      <div>
+        <span className="sm-product-summary-label">Product</span>
+        <strong>{name}</strong>
+        <small>{product.sku ? `SKU: ${product.sku}` : "Product selected"}{product.price != null ? ` · $${price.toFixed(2)}` : ""}</small>
+      </div>
+    </div>
+  );
+}
+
 function readBuyerMarker(value) {
   if (!value?.startsWith("virtual-buyer:")) return null;
   try {
@@ -215,7 +231,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
         id:        item.id,
         mine:      item.sender_id === sellerId,
         text:      item.body,
-        product:   null,
+        product:   buyerProfile?.product || null,
         imageUrl:  item.image_url,
         date:      new Date(item.created_at).toLocaleString(),
         createdAt: item.created_at,
@@ -223,7 +239,12 @@ export default function SellerMessages({ client, sellerId, onBack }) {
       });
     });
     return Array.from(byPartner.values())
-      .map((thread) => ({ ...thread, lastMessage: thread.messages[thread.messages.length - 1], unreadCount: thread.messages.filter((message) => message.unread).length }))
+      .map((thread) => ({
+        ...thread,
+        product: thread.buyerProfile?.product || thread.messages.find((message) => message.product)?.product || null,
+        lastMessage: thread.messages[thread.messages.length - 1],
+        unreadCount: thread.messages.filter((message) => message.unread).length,
+      }))
       .sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt));
   };
 
@@ -376,6 +397,7 @@ export default function SellerMessages({ client, sellerId, onBack }) {
                           {thread.lastMessage?.mine ? "You: " : ""}
                           {thread.lastMessage?.text || ""}
                         </p>
+                        <ProductSummary product={thread.product} compact />
                       </div>
                     </article>
                   </li>
@@ -439,6 +461,8 @@ export default function SellerMessages({ client, sellerId, onBack }) {
                 ✕
               </button>
             </div>
+
+            {openThread.type === "buyer" && <ProductSummary product={activeThread.product} />}
 
             {/* Bubbles */}
             <div className="sm-bubbles">

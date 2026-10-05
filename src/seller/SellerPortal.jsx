@@ -9,8 +9,6 @@ import SellerInvite from './SellerInvite';
 import SellerFeedback from './SellerFeedback';
 import SellerService from './SellerService';
 import { adminSupabase, agentSupabase, sellerSupabase } from '../shared/supabase';
-import { readImageFile } from '../shared/avatar';
-import AvatarCropper from '../shared/AvatarCropper';
 
 const periods = ['Today', 'This Week', 'This Month', 'Total'];
 const faqs = [
@@ -31,45 +29,14 @@ const faqs = [
   const [clickCounts, setClickCounts] = useState({ 'Today': 0, 'This Week': 0, 'This Month': 0, 'Total': 0 });
   const [showcaseCount, setShowcaseCount] = useState(null);
   const [portalClient, setPortalClient] = useState(sellerSupabase);
-  const [avatarBusy] = useState(false);
-  const [avatarError, setAvatarError] = useState('');
-  const [cropSource, setCropSource] = useState('');
   const [portfolioOpen, setPortfolioOpen] = useState(false);
   const [portfolioBusy, setPortfolioBusy] = useState(false);
   const [portfolioError, setPortfolioError] = useState('');
-  const [portfolio, setPortfolio] = useState({ name: '', storeName: '', image: '' });
+  const [portfolio, setPortfolio] = useState({ storeName: '' });
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [trafficBusy, setTrafficBusy] = useState(false);
   const [trafficError, setTrafficError] = useState('');
   const [unreadMessages, setUnreadMessages] = useState(0);
-
-  const pickShopAvatarFile = async (file) => {
-    if (!file) return;
-    setAvatarError('');
-    try {
-      setCropSource(await readImageFile(file));
-    } catch (err) {
-      setAvatarError(err.message || 'Could not read that image.');
-    }
-  };
-  const uploadShopAvatar = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    pickShopAvatarFile(file);
-  };
-  const pasteShopAvatar = (event) => {
-    const file = Array.from(event.clipboardData?.items || [])
-      .find((item) => item.type.startsWith('image/'))
-      ?.getAsFile();
-    if (file) {
-      event.preventDefault();
-      pickShopAvatarFile(file);
-    }
-  };
-  const confirmShopAvatarCrop = async (croppedDataUrl) => {
-    setCropSource('');
-    setPortfolio((current) => ({ ...current, image: croppedDataUrl }));
-  };
 
   const resolvePortalClient = async () => {
     if (!previewMerchant) return sellerSupabase;
@@ -117,7 +84,7 @@ const faqs = [
       client.from('showcase_products').select('product_id', { count: 'exact', head: true }).eq('seller_id', id),
       client.from('messages').select('id', { count: 'exact', head: true }).eq('recipient_id', id).is('read_at', null),
     ]);
-    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.store_name || profileRes.data.display_name || profileRes.data.email || ''); }
+    if (profileRes.data) { setProfile(profileRes.data); setShopName(profileRes.data.store_name || profileRes.data.display_name || 'Store'); }
     setOrders(ordersRes.data || []);
     setClickCounts({
       'Today': todayClicksRes.count || 0,
@@ -175,19 +142,19 @@ const faqs = [
   const openPortfolio = () => {
     if (previewMerchant) return;
     setPortfolioError('');
-    setPortfolio({ name: profile?.display_name || '', storeName: profile?.store_name || '', image: profile?.avatar_url || '' });
+    setPortfolio({ storeName: profile?.store_name || shopName || '' });
     setPortfolioOpen(true);
   };
   const savePortfolio = async (event) => {
     event.preventDefault();
-    if (!sellerId || !portfolio.name.trim() || !portfolio.storeName.trim()) return;
+    if (!sellerId || !portfolio.storeName.trim()) return;
     setPortfolioBusy(true); setPortfolioError('');
     const { error } = await portalClient.from('profiles').update({
-      display_name: portfolio.name.trim(), store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null,
+      store_name: portfolio.storeName.trim(),
     }).eq('id', sellerId);
     setPortfolioBusy(false);
     if (error) { setPortfolioError(error.message || 'Could not save your portfolio.'); return; }
-    setProfile((current) => ({ ...current, display_name: portfolio.name.trim(), store_name: portfolio.storeName.trim(), avatar_url: portfolio.image || null }));
+    setProfile((current) => ({ ...current, store_name: portfolio.storeName.trim() }));
     setShopName(portfolio.storeName.trim());
     setPortfolioOpen(false);
   };
@@ -222,34 +189,16 @@ const faqs = [
       <div className="seller-center-shell">
         <header className="seller-center-topbar"><button type="button" onClick={onLogout} aria-label="Sign out">↪</button><h1>Seller Center</h1><div><button className="seller-message-button" type="button" onClick={() => setSellerView('messages')} aria-label={unreadMessages ? `${unreadMessages} unread messages` : 'Messages'}><svg className="seller-message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5Z" /><circle cx="8" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="16" cy="11.5" r=".8" fill="currentColor" stroke="none" /></svg>{unreadMessages > 0 && <b className="seller-message-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</b>}</button><button type="button" aria-label="Language">◎</button></div></header>
         <section className="seller-profile-row" onClick={openPortfolio} role={previewMerchant ? undefined : 'button'} tabIndex={previewMerchant ? undefined : 0} onKeyDown={(event) => event.key === 'Enter' && openPortfolio()}>
-          <div
-            className="seller-avatar-wrap"
-            tabIndex={previewMerchant ? -1 : 0}
-            onPaste={previewMerchant ? undefined : pasteShopAvatar}
-          >
+          <div className="seller-avatar-wrap">
             {profile?.avatar_url ? (
               <img className="seller-avatar-photo" src={profile.avatar_url} alt="" />
             ) : (
               <div className="seller-avatar">{shopName.charAt(0).toUpperCase()}</div>
             )}
-            {!previewMerchant && (
-              <label className="seller-avatar-edit" aria-label="Change shop photo">
-                {avatarBusy ? '…' : '✎'}
-                <input type="file" accept="image/*" onChange={uploadShopAvatar} hidden />
-              </label>
-            )}
           </div>
-          <div className="seller-profile-copy"><div><h2>{shopName}</h2></div><span>{profile?.display_name || 'Seller'} · Credit Score {profile?.credit_score ?? 100}</span></div>
+          <div className="seller-profile-copy"><div><h2>{shopName}</h2></div><span>Credit Score {profile?.credit_score ?? 100}</span></div>
           <button className="seller-wallet-btn" type="button" onClick={(event) => { event.stopPropagation(); setSellerView('wallet'); }}>Wallet</button>
         </section>
-        {avatarError && <p className="seller-avatar-error">{avatarError}</p>}
-        {cropSource && (
-          <AvatarCropper
-            src={cropSource}
-            onCancel={() => setCropSource('')}
-            onConfirm={confirmShopAvatarCrop}
-          />
-        )}
         <nav className="seller-primary-links"><button type="button" onClick={() => setSellerView('showcase')}>▣ <strong>Showcase ({showcaseCount === null ? '…' : showcaseCount.toLocaleString()})</strong></button><button type="button" onClick={() => setSellerView('orders')}>▤ <strong>Orders</strong></button></nav>
         <button className="seller-traffic-banner seller-exposure-banner" type="button" aria-label="Free Traffic Package" onClick={() => { setTrafficError(''); setShowTrafficModal(true); }}>
           <span className="seller-exposure-brand">TikTok<br />Shop</span>
@@ -278,7 +227,7 @@ const faqs = [
           </section>
         </div>
       )}
-      {portfolioOpen && <div className="seller-portfolio-overlay" onMouseDown={(event) => event.target === event.currentTarget && !portfolioBusy && setPortfolioOpen(false)}><form className="seller-portfolio-modal" onSubmit={savePortfolio}><header><h2>Edit portfolio</h2><button type="button" onClick={() => setPortfolioOpen(false)} aria-label="Close">×</button></header><label className="seller-portfolio-image">{portfolio.image ? <img src={portfolio.image} alt="Portfolio preview" /> : <span>{portfolio.storeName?.charAt(0)?.toUpperCase() || 'S'}</span>}<input type="file" accept="image/*" onChange={uploadShopAvatar} hidden /><b>Change image</b></label><label>Name<input required maxLength="80" value={portfolio.name} onChange={(event) => setPortfolio((current) => ({ ...current, name: event.target.value }))} /></label><label>Store name<input required maxLength="100" value={portfolio.storeName} onChange={(event) => setPortfolio((current) => ({ ...current, storeName: event.target.value }))} /></label>{portfolioError && <p role="alert">{portfolioError}</p>}<footer><button type="button" onClick={() => setPortfolioOpen(false)} disabled={portfolioBusy}>Cancel</button><button disabled={portfolioBusy}>{portfolioBusy ? 'Saving…' : 'Save changes'}</button></footer></form></div>}
+      {portfolioOpen && <div className="seller-portfolio-overlay" onMouseDown={(event) => event.target === event.currentTarget && !portfolioBusy && setPortfolioOpen(false)}><form className="seller-portfolio-modal" onSubmit={savePortfolio}><header><h2>Edit store name</h2><button type="button" onClick={() => setPortfolioOpen(false)} aria-label="Close">×</button></header><label>Store name<input autoFocus required maxLength="100" value={portfolio.storeName} onChange={(event) => setPortfolio((current) => ({ ...current, storeName: event.target.value }))} /></label>{portfolioError && <p role="alert">{portfolioError}</p>}<footer><button type="button" onClick={() => setPortfolioOpen(false)} disabled={portfolioBusy}>Cancel</button><button disabled={portfolioBusy}>{portfolioBusy ? 'Saving…' : 'Save changes'}</button></footer></form></div>}
     </main>
   );
 }
