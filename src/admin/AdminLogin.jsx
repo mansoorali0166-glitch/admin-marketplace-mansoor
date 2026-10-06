@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import './AdminLogin.css';
-import { adminSupabase } from '../shared/supabase';
+import { adminRecoverySupabase, adminSupabase } from '../shared/supabase';
 
 export default function AdminLogin({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -8,7 +8,13 @@ export default function AdminLogin({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryStep, setRecoveryStep] = useState('request');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,6 +33,37 @@ export default function AdminLogin({ onLoginSuccess }) {
     onLoginSuccess();
   };
 
+  const sendRecoveryCode = async (event) => {
+    event.preventDefault();
+    setSubmitting(true); setError(''); setNotice('');
+    const { error: recoveryError } = await adminRecoverySupabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
+    setSubmitting(false);
+    if (recoveryError) return setError(recoveryError.message);
+    setRecoveryStep('verify');
+    setNotice('If this is an administrator email, a recovery code has been sent.');
+  };
+
+  const resetWithOtp = async (event) => {
+    event.preventDefault();
+    setSubmitting(true); setError(''); setNotice('');
+    if (newPassword.length < 6) { setSubmitting(false); return setError('New password must be at least 6 characters.'); }
+    if (newPassword !== confirmPassword) { setSubmitting(false); return setError('New passwords do not match.'); }
+    const { data: verification, error: verificationError } = await adminRecoverySupabase.auth.verifyOtp({ email, token: otp.trim(), type: 'recovery' });
+    if (verificationError || !verification.user) { setSubmitting(false); return setError(verificationError?.message || 'That recovery code is invalid or has expired.'); }
+    const { data: profile, error: profileError } = await adminRecoverySupabase.from('profiles').select('role').eq('id', verification.user.id).maybeSingle();
+    if (profileError || profile?.role?.toLowerCase() !== 'admin') { await adminRecoverySupabase.auth.signOut(); setSubmitting(false); return setError('This recovery code is not for an administrator account.'); }
+    const { error: updateError } = await adminRecoverySupabase.auth.updateUser({ password: newPassword });
+    await adminRecoverySupabase.auth.signOut();
+    setSubmitting(false);
+    if (updateError) return setError(updateError.message);
+    setPassword(''); setOtp(''); setNewPassword(''); setConfirmPassword(''); setRecoveryOpen(false); setRecoveryStep('request');
+    setNotice('Password reset. You can now sign in with your new password.');
+  };
+
+  const closeRecovery = () => { setRecoveryOpen(false); setRecoveryStep('request'); setOtp(''); setNewPassword(''); setConfirmPassword(''); setError(''); setNotice(''); };
+
   return (
     <div className="admin-portal-container">
       {/* Top Header Section */}
@@ -42,10 +79,11 @@ export default function AdminLogin({ onLoginSuccess }) {
 
       {/* Main Login Card */}
       <div className="login-card">
-        <h2>Sign in to your account</h2>
+        <h2>{recoveryOpen ? 'Reset administrator password' : 'Sign in to your account'}</h2>
         
-        <form onSubmit={handleSubmit}>
+        {!recoveryOpen ? <form onSubmit={handleSubmit}>
           {error && <p style={{color:'#dc2626',fontSize:13}}>{error}</p>}
+          {notice && <p className="login-notice">{notice}</p>}
           {/* Email Input */}
           <div className="input-group">
             <label htmlFor="email">EMAIL ADDRESS</label>
@@ -94,16 +132,33 @@ export default function AdminLogin({ onLoginSuccess }) {
 
           {/* Sign In Button */}
           <button type="submit" className="submit-btn" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</button>
-        </form>
+          <button className="forgot-password" type="button" onClick={() => { setError(''); setNotice(''); setRecoveryOpen(true); }}>Forgot password?</button>
+        </form> : recoveryStep === 'request' ? <form onSubmit={sendRecoveryCode}>
+          {error && <p style={{color:'#dc2626',fontSize:13}}>{error}</p>}
+          <p className="recovery-help">Enter the email address for your administrator account. We will send a one-time recovery code.</p>
+          <div className="input-group"><label htmlFor="recovery-email">ADMIN EMAIL ADDRESS</label><input type="email" id="recovery-email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@example.com" required /></div>
+          <button type="submit" className="submit-btn" disabled={submitting}>{submitting ? 'Sending…' : 'Send recovery code'}</button>
+          <button className="forgot-password" type="button" onClick={closeRecovery}>Back to sign in</button>
+        </form> : <form onSubmit={resetWithOtp}>
+          {error && <p style={{color:'#dc2626',fontSize:13}}>{error}</p>}
+          {notice && <p className="login-notice">{notice}</p>}
+          <p className="recovery-help">Enter the one-time code emailed to <strong>{email}</strong>, then choose a new password.</p>
+          <div className="input-group"><label htmlFor="recovery-otp">RECOVERY CODE</label><input type="text" inputMode="numeric" autoComplete="one-time-code" id="recovery-otp" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\s/g, ''))} placeholder="Enter code" required /></div>
+          <div className="input-group"><label htmlFor="new-admin-password">NEW PASSWORD</label><input type="password" minLength="6" id="new-admin-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 6 characters" required /></div>
+          <div className="input-group"><label htmlFor="confirm-admin-password">CONFIRM NEW PASSWORD</label><input type="password" minLength="6" id="confirm-admin-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter it again" required /></div>
+          <button type="submit" className="submit-btn" disabled={submitting}>{submitting ? 'Resetting…' : 'Reset password'}</button>
+          <button className="forgot-password" type="button" disabled={submitting} onClick={sendRecoveryCode}>Resend code</button>
+          <button className="forgot-password" type="button" disabled={submitting} onClick={closeRecovery}>Back to sign in</button>
+        </form>}
       </div>
 
       {/* Footer Helper Links */}
-      <div className="portal-footer">
+      {!recoveryOpen && <div className="portal-footer">
         <span>Not an admin? </span>
         <a href="#agent">Agent login</a>
         <span className="dot-separator">·</span>
         <a href="/seller">Seller login</a>
-      </div>
+      </div>}
     </div>
   );
 }

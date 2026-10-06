@@ -9,8 +9,14 @@ const makeClient = (storageKey) => supabaseConfigured
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey },
     })
   : null;
+const makeRecoveryClient = () => supabaseConfigured
+  ? createClient(supabaseUrl, supabasePublishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    })
+  : null;
 
 export const adminSupabase = makeClient('marketplace-admin-auth');
+export const adminRecoverySupabase = makeRecoveryClient();
 export const sellerSupabase = makeClient('marketplace-seller-auth');
 export const agentSupabase = makeClient('marketplace-agent-auth');
 const currentPath = window.location.pathname.toLowerCase();

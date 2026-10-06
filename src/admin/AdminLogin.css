@@ -152,6 +152,8 @@
   background-color: #4338ca;
 }
 
+.forgot-password{display:block;margin:14px auto 0;border:0;background:none;color:#a5b4fc;font-size:13px;cursor:pointer}.forgot-password:hover{text-decoration:underline}.login-notice{margin:0 0 16px;color:#86efac;font-size:13px}.recovery-help{margin:-7px 0 20px;color:#a0aec0;font-size:13px;line-height:1.5}.recovery-help strong{color:#e2e8f0}
+
 /* Link Footer styling */
 .portal-footer {
   margin-top: 24px;
