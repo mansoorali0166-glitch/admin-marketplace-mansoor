@@ -23,7 +23,7 @@ export default function AdminLogin({ onLoginSuccess }) {
     const { data, error: authError } = await adminSupabase.auth.signInWithPassword({ email, password });
     if (authError) { setError(authError.message); setSubmitting(false); return; }
     const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', data.user.id).single();
-    if (profile?.role !== 'admin') { await adminSupabase.auth.signOut(); setError('This account does not have administrator access.'); setSubmitting(false); return; }
+    if (profile?.role?.toLowerCase() !== 'admin') { await adminSupabase.auth.signOut(); setError('This account does not have administrator access.'); setSubmitting(false); return; }
     onLoginSuccess();
   };
 

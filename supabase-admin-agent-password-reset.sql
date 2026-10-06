@@ -13,7 +13,7 @@ begin
   -- Check the caller directly instead of relying on an older installed
   -- is_admin() helper, which may not match the current profile policy.
   if auth.uid() is null or not exists (
-    select 1 from public.profiles where id = auth.uid() and role = 'admin'
+    select 1 from public.profiles where id = auth.uid() and lower(role) = 'admin'
   ) then
     raise exception 'Administrator access required.';
   end if;

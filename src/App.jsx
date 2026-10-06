@@ -25,6 +25,13 @@ export default function App() {
       return;
     }
     const client = isSellerPortal ? sellerSupabase : isAgentPortal ? agentSupabase : adminSupabase;
+    const validateAdminSession = async (session) => {
+      if (!session) return false;
+      const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+      const canAccess = profile?.role?.toLowerCase() === 'admin';
+      if (!canAccess) await adminSupabase.auth.signOut();
+      return canAccess;
+    };
     const validateSellerSession = async (session) => {
       if (!session) return false;
       const [{ data: profile }, { data: application }] = await Promise.all([
@@ -48,7 +55,7 @@ export default function App() {
         if (!canAccess) await agentSupabase.auth.signOut();
         setIsAgentLoggedIn(canAccess);
       }
-      else setIsAdminLoggedIn(Boolean(data.session));
+      else setIsAdminLoggedIn(await validateAdminSession(data.session));
       setAuthLoading(false);
     });
     const { data: listener } = client.auth.onAuthStateChange((event, session) => {
@@ -59,7 +66,7 @@ export default function App() {
         }
       }
       else if (isAgentPortal && event === 'SIGNED_OUT') setIsAgentLoggedIn(false);
-      else setIsAdminLoggedIn(Boolean(session));
+      else validateAdminSession(session).then(setIsAdminLoggedIn);
     });
     return () => listener.subscription.unsubscribe();
   }, [isAgentPortal, isSellerPortal]);
