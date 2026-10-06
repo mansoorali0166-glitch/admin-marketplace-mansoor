@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './MyAccount.css';
+import { adminSupabase } from '../shared/supabase';
 
 export default function MyAccount() {
   const [displayName, setDisplayName] = useState('Administrator');
-  const [email, setEmail] = useState('admin@admin.com');
-  const [newEmail, setNewEmail] = useState('agent1000@gmail.com');
+  const [email, setEmail] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [userId, setUserId] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [showPasswords, setShowPasswords] = useState({ current: false, next: false, confirm: false });
   const [notice, setNotice] = useState('');
@@ -12,6 +15,19 @@ export default function MyAccount() {
   const inviteLink = `${window.location.origin}/seller?invite=${inviteCode}`;
 
   const flash = (message) => { setNotice(message); window.setTimeout(() => setNotice(''), 1800); };
+  useEffect(() => {
+    const loadAccount = async () => {
+      const { data: auth } = await adminSupabase.auth.getUser();
+      if (!auth.user) return;
+      const { data: profile } = await adminSupabase.from('profiles').select('email,display_name').eq('id', auth.user.id).maybeSingle();
+      const savedEmail = profile?.email || auth.user.email || '';
+      setUserId(auth.user.id);
+      setEmail(savedEmail);
+      setNewEmail(savedEmail);
+      if (profile?.display_name) setDisplayName(profile.display_name);
+    };
+    loadAccount();
+  }, []);
   const updatePassword = (event) => {
     event.preventDefault();
     if (passwords.next.length < 6) return flash('New password must be at least 6 characters.');
@@ -23,13 +39,27 @@ export default function MyAccount() {
     try { await navigator.clipboard.writeText(value); flash('Copied to clipboard.'); }
     catch { flash('Copy was unavailable.'); }
   };
+  const updateEmail = async (event) => {
+    event.preventDefault();
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    if (!normalizedEmail) return flash('Enter a new email address.');
+    if (normalizedEmail === email.toLowerCase()) return flash('Enter a different email address.');
+    setEmailBusy(true);
+    const { data, error } = await adminSupabase.rpc('change_admin_email', { new_email: normalizedEmail });
+    setEmailBusy(false);
+    if (error) return flash(error.message);
+    const updatedEmail = data || normalizedEmail;
+    setEmail(updatedEmail);
+    setNewEmail(updatedEmail);
+    flash('Email updated. Use the new email the next time you sign in.');
+  };
 
   return <section className="my-account-page">
     <h2>My Account</h2>
     {notice && <div className="account-notice">{notice}</div>}
 
     <div className="account-panel"><h3>♙ <span>Account Info</span></h3><div className="account-panel-body account-info-fields">
-      <label>USER ID<input disabled value="ad56b3c3-945c-49eb-a758-064ea9981c54" /></label>
+      <label>USER ID<input disabled value={userId || 'Loading…'} /></label>
       <label>EMAIL ADDRESS<input disabled value={email} /></label>
       <label>ADMIN SINCE<input disabled value="July 16, 2026" /></label>
     </div></div>
@@ -38,8 +68,8 @@ export default function MyAccount() {
       <label>DISPLAY NAME<input required value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><button className="account-primary-btn" type="submit">▣ Save Name</button>
     </div></form>
 
-    <form className="account-panel" onSubmit={(event) => { event.preventDefault(); setEmail(newEmail); flash('Email updated.'); }}><h3>✉ <span>Change Email</span></h3><div className="account-panel-body">
-      <label>CURRENT EMAIL<input disabled value={email} /></label><label>NEW EMAIL ADDRESS<input required type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></label><button className="account-primary-btn" type="submit">▣ Update Email</button><p className="account-help">A confirmation link will be sent to your new address.</p>
+    <form className="account-panel" onSubmit={updateEmail}><h3>✉ <span>Change Email</span></h3><div className="account-panel-body">
+      <label>CURRENT EMAIL<input disabled value={email} /></label><label>NEW EMAIL ADDRESS<input required type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></label><button className="account-primary-btn" type="submit" disabled={emailBusy}>{emailBusy ? 'Updating…' : '▣ Update Email'}</button><p className="account-help">This immediately updates your admin profile and sign-in email.</p>
     </div></form>
 
     <form className="account-panel" onSubmit={updatePassword}><h3>♧ <span>Change Password</span></h3><div className="account-panel-body password-fields">
