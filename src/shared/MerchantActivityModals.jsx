@@ -141,7 +141,7 @@ export default function MerchantActivityModals({ client, merchant, action, onClo
     } catch (error) { setMessage(error.message || 'Could not create orders.'); }
     finally { setBusy(false); }
   };
-  const updateOrderStatus = async (id, status) => { setBusy(true); const { error } = await client.from('orders').update({ status }).eq('id', id).eq('seller_id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); };
+  const updateOrderStatus = async (id, status) => { setBusy(true); const { error } = await client.rpc('settle_order_status', { target_order_id: String(id), new_status: status }); setBusy(false); if (error) return setMessage(error.message); await load(); onChanged?.(); };
   const exportLogs = () => { const fields = ['created_at','category','action','actor','ip','device','details']; const csv = [fields.join(','), ...visibleLogs.map(row => fields.map(key => `"${String(row[key] || '').replace(/"/g,'""')}"`).join(','))].join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${merchant.name || 'seller'}-activity.csv`; link.click(); URL.revokeObjectURL(url); };
   const updateShop = async (values) => { setBusy(true); const { error } = await client.from('profiles').update(values).eq('id', merchant.userId); setBusy(false); if (error) return setMessage(error.message); onChanged?.(); onClose(); };
   const stopClicks = async () => {

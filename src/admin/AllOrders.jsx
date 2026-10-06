@@ -109,12 +109,10 @@ export default function AllOrders() {
     setMessage("");
     setUpdatingId(order.dbId);
     setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status } : item));
-    const directUpdate = await adminSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId).select("id").maybeSingle();
-    let error = directUpdate.error;
-    if (error || !directUpdate.data) {
-      const rpcResult = await adminSupabase.rpc("admin_update_order_status", { order_id_text: String(order.dbId), new_status: status });
-      error = rpcResult.error;
-    }
+    const { error } = await adminSupabase.rpc("settle_order_status", {
+      target_order_id: String(order.dbId),
+      new_status: status,
+    });
     if (error) {
       setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status: previousStatus } : item));
       setMessage(`Could not update order ${order.id}: ${error.message}`);

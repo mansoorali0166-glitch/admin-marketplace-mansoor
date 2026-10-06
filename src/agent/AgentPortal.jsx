@@ -3828,11 +3828,10 @@ function AgentOrderList() {
     setOrders((current) => current.map((item) => (
       item.dbId === order.dbId ? { ...item, status: nextStatus } : item
     )));
-    const { error } = await agentSupabase
-      .from("orders")
-      .update({ status: nextStatus, updated_at: new Date().toISOString() })
-      .eq("id", order.dbId)
-      .eq("seller_id", order.sellerId);
+    const { error } = await agentSupabase.rpc("settle_order_status", {
+      target_order_id: String(order.dbId),
+      new_status: nextStatus,
+    });
     if (error) {
       setOrders((current) => current.map((item) => (
         item.dbId === order.dbId ? { ...item, status: previousStatus } : item
@@ -4158,7 +4157,10 @@ function AgentOrderManagement() {
     setOrders((current) =>
       current.map((item) => (item.dbId === order.dbId ? { ...item, status } : item)),
     );
-    const { error } = await agentSupabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", order.dbId);
+    const { error } = await agentSupabase.rpc("settle_order_status", {
+      target_order_id: String(order.dbId),
+      new_status: status,
+    });
     if (error) {
       setOrders((current) => current.map((item) => item.dbId === order.dbId ? { ...item, status: previousStatus } : item));
       setMessage(`Could not update order ${order.id}: ${error.message}`);
