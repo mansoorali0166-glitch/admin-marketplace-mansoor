@@ -166,8 +166,20 @@ create policy "withdrawals admin update" on public.withdrawals for update to aut
 create policy "transactions read own or admin" on public.wallet_transactions for select to authenticated using (seller_id=auth.uid() or public.is_admin());
 create policy "transactions admin write" on public.wallet_transactions for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "payments read own or admin" on public.payment_methods for select to authenticated using (seller_id=auth.uid() or public.is_admin());
-create policy "payments insert own" on public.payment_methods for insert to authenticated with check (seller_id=auth.uid());
-create policy "payments update own" on public.payment_methods for update to authenticated using (seller_id=auth.uid()) with check (seller_id=auth.uid());
+create policy "payments insert own" on public.payment_methods for insert to authenticated with check (
+  seller_id=auth.uid() and (
+    method_type <> 'bank_card' or not coalesce((select bank_card_locked from public.profiles where id=auth.uid()), false)
+  )
+);
+create policy "payments update own" on public.payment_methods for update to authenticated using (
+  seller_id=auth.uid() and (
+    method_type <> 'bank_card' or not coalesce((select bank_card_locked from public.profiles where id=auth.uid()), false)
+  )
+) with check (
+  seller_id=auth.uid() and (
+    method_type <> 'bank_card' or not coalesce((select bank_card_locked from public.profiles where id=auth.uid()), false)
+  )
+);
 create policy "payments admin insert" on public.payment_methods for insert to authenticated with check (public.is_admin());
 create policy "payments admin update" on public.payment_methods for update to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "balance locks read own admin agent" on public.balance_locks for select to authenticated using (seller_id=auth.uid() or public.is_admin() or public.is_agent());

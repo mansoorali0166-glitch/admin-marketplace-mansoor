@@ -7,6 +7,10 @@ export default function AgentStatusModal({ agent, onClose, onChanged }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [success, setSuccess] = useState("");
 
   if (!agent) return null;
 
@@ -45,6 +49,25 @@ export default function AgentStatusModal({ agent, onClose, onChanged }) {
     onClose();
   };
 
+  const resetPassword = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+    if (newPassword.length < 6) return setError("The new password must be at least 6 characters.");
+    if (newPassword !== confirmPassword) return setError("The new passwords do not match.");
+    setSaving(true);
+    const { error: resetError } = await adminSupabase.rpc("reset_agent_password", {
+      target_agent_id: agent.dbId,
+      new_password: newPassword,
+    });
+    setSaving(false);
+    if (resetError) return setError(resetError.message || "Could not reset this agent's password.");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordOpen(false);
+    setSuccess("Password updated. The agent will need to sign in again.");
+  };
+
   return (
     <div
       className="agent-status-modal-overlay"
@@ -61,7 +84,10 @@ export default function AgentStatusModal({ agent, onClose, onChanged }) {
         </header>
         <p className="agent-status-help">{confirmingDelete ? "This permanently removes the agent login and cannot be undone." : "Choose whether this agent can access the agent portal."}</p>
         {error && <p className="agent-status-error">{error}</p>}
+        {success && <p className="agent-status-success">{success}</p>}
+        {passwordOpen && <form className="agent-password-reset" onSubmit={resetPassword}><label>NEW PASSWORD<input autoFocus required minLength="6" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 6 characters" /></label><label>CONFIRM NEW PASSWORD<input required minLength="6" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter it again" /></label><div><button type="button" disabled={saving} onClick={() => { setPasswordOpen(false); setNewPassword(""); setConfirmPassword(""); }}>Cancel</button><button type="submit" className="reset-password" disabled={saving}>{saving ? "Saving…" : "Save New Password"}</button></div></form>}
         <div className="agent-status-modal-actions">
+          <button type="button" className="reset-password" disabled={saving || passwordOpen} onClick={() => { setError(""); setSuccess(""); setPasswordOpen(true); }}>Reset Password</button>
           <button
             type="button"
             className="activate"

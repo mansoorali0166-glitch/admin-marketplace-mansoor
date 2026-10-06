@@ -29,18 +29,18 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   const [walletView, setWalletView] = useState('wallet');
   const [liveTransactions, setLiveTransactions] = useState([]);
   const [frozen, setFrozen] = useState(0);
-  const [boundPaymentMethods, setBoundPaymentMethods] = useState(new Set());
+  const [bankCardLocked, setBankCardLocked] = useState(false);
   const loadWallet = useCallback(async () => {
     if (!sellerId) return;
-    const [txnRes, lockRes, paymentMethodsRes] = await Promise.all([
+    const [txnRes, lockRes, profileRes] = await Promise.all([
       client.from('wallet_transactions').select('*').eq('seller_id', sellerId).order('created_at', { ascending: false }),
       client.from('balance_locks').select('amount,status,lock_until').eq('seller_id', sellerId),
-      client.from('payment_methods').select('method_type').eq('seller_id', sellerId).in('method_type', ['bank_card', 'e_wallet', 'digital_currency']),
+      client.from('profiles').select('bank_card_locked').eq('id', sellerId).maybeSingle(),
     ]);
     setLiveTransactions((txnRes.data || []).map((row) => ({ id: row.id, type: /withdraw/i.test(row.type) ? 'Withdraw' : /order/i.test(row.type) ? 'Orders' : 'Recharge', title: row.type || 'Balance transaction', date: new Date(row.created_at).toLocaleString(), amount: `${Number(row.amount || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(row.amount || 0)).toFixed(2)}` })));
     const now = Date.now();
     setFrozen((lockRes.data || []).filter((row) => String(row.status).toLowerCase() === 'active' && (!row.lock_until || new Date(row.lock_until).getTime() > now)).reduce((sum, row) => sum + Number(row.amount || 0), 0));
-    setBoundPaymentMethods(new Set((paymentMethodsRes.data || []).map((row) => row.method_type)));
+    setBankCardLocked(!!profileRes.data?.bank_card_locked);
   }, [client, sellerId]);
   useEffect(() => {
     if (!sellerId) return;
@@ -51,6 +51,7 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions', filter: `seller_id=eq.${sellerId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'balance_locks', filter: `seller_id=eq.${sellerId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods', filter: `seller_id=eq.${sellerId}` }, refresh)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${sellerId}` }, refresh)
       .subscribe();
     return () => { window.removeEventListener('focus', refresh); client.removeChannel(channel); };
   }, [client, sellerId, loadWallet]);
@@ -59,8 +60,8 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
   const assets = Math.max(0, walletTotal - frozen);
   const visibleTransactions = useMemo(() => filter === 'All' ? sourceTransactions : sourceTransactions.filter((item) => item.type === filter), [filter, sourceTransactions]);
   const openPaymentMethod = (methodType, view) => {
-    if (boundPaymentMethods.has(methodType)) {
-      setDialog({ agentOnly: true, title: 'Account information' });
+    if (methodType === 'bank_card' && bankCardLocked) {
+      setDialog({ agentOnly: true, title: 'Bank card locked' });
       return;
     }
     setWalletView(view);
@@ -83,6 +84,6 @@ export default function SellerWallet({ onBack, sellerId, client = sellerSupabase
     <section className="wallet-transactions"><div className="wallet-transactions-heading"><h2>Transaction History</h2><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>All</option><option>Orders</option><option>Recharge</option><option>Withdraw</option></select></div>
       <div>{visibleTransactions.map((item) => <article key={item.id}><div><strong>{item.title}</strong><time>{item.date}</time></div><b className={item.amount.startsWith('+') ? 'positive' : 'negative'}>{item.amount}</b></article>)}</div>
     </section>
-    {dialog && <div className="wallet-dialog-overlay" onMouseDown={(event) => event.target === event.currentTarget && setDialog(null)}><form className="wallet-dialog" onSubmit={(event) => { event.preventDefault(); setAmount(''); setDialog(null); }}><div><h2>{dialog.title}</h2><button type="button" onClick={() => setDialog(null)}>×</button></div>{dialog.agentOnly ? <><p>Only your agent can change your bank account information.</p><button type="button" onClick={() => setDialog(null)}>OK</button></> : ['Recharge','Withdraw'].includes(dialog.title) ? <><label>Amount (USD)<input autoFocus required min="1" type="number" placeholder="Enter amount" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><button type="submit">Continue</button></> : <><p>{dialog.title} settings will be connected to your payment system later.</p><button type="button" onClick={() => setDialog(null)}>Close</button></>}</form></div>}
+    {dialog && <div className="wallet-dialog-overlay" onMouseDown={(event) => event.target === event.currentTarget && setDialog(null)}><form className="wallet-dialog" onSubmit={(event) => { event.preventDefault(); setAmount(''); setDialog(null); }}><div><h2>{dialog.title}</h2><button type="button" onClick={() => setDialog(null)}>×</button></div>{dialog.agentOnly ? <><p>Only your agent can change your bank card information while it is locked.</p><button type="button" onClick={() => setDialog(null)}>OK</button></> : ['Recharge','Withdraw'].includes(dialog.title) ? <><label>Amount (USD)<input autoFocus required min="1" type="number" placeholder="Enter amount" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><button type="submit">Continue</button></> : <><p>{dialog.title} settings will be connected to your payment system later.</p><button type="button" onClick={() => setDialog(null)}>Close</button></>}</form></div>}
   </div></main>;
 }

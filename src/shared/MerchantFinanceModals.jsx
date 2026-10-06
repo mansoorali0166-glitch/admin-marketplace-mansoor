@@ -11,6 +11,7 @@ export default function MerchantFinanceModals({ client, merchant, action: reques
   const [amount, setAmount] = useState('');
   const [remark, setRemark] = useState('');
   const [lockUntil, setLockUntil] = useState('');
+  const [activeLockAmount, setActiveLockAmount] = useState(0);
   const [logs, setLogs] = useState([]);
   const [logCurrency, setLogCurrency] = useState('USD');
   const [logType, setLogType] = useState('All');
@@ -30,6 +31,7 @@ export default function MerchantFinanceModals({ client, merchant, action: reques
     if (action === 'Payment Methods') loadPayments();
     if (action === 'Payment') loadWithdrawals();
     if (action === 'Freeze') { setAmount(''); setRemark(''); }
+    if (action === 'Unfreeze') { setAmount(''); setMessage(''); loadActiveLockAmount(); }
   }, [action, merchant?.userId]);
 
   useEffect(() => {
@@ -41,6 +43,12 @@ export default function MerchantFinanceModals({ client, merchant, action: reques
   const loadLogs = async () => {
     const { data } = await client.from('wallet_transactions').select('*').eq('seller_id', merchant.userId).order('created_at', { ascending: false });
     setLogs(data || []);
+  };
+
+  const loadActiveLockAmount = async () => {
+    const { data, error } = await client.from('balance_locks').select('amount').eq('seller_id', merchant.userId).eq('status', 'Active');
+    if (error) return setMessage(error.message);
+    setActiveLockAmount((data || []).reduce((total, lock) => total + Number(lock.amount || 0), 0));
   };
 
   const loadPayments = async () => {
@@ -97,8 +105,26 @@ export default function MerchantFinanceModals({ client, merchant, action: reques
   const saveUnfreeze = async (event) => {
     event.preventDefault();
     if (!requireLiveMerchant()) return;
+    const requestedAmount = Math.round(Number(amount) * 100) / 100;
+    if (!requestedAmount || requestedAmount <= 0) return setMessage('Enter a valid amount to unfreeze.');
     setBusy(true);
-    const { error } = await client.from('balance_locks').update({ status: 'Released', released_at: new Date().toISOString() }).eq('seller_id', merchant.userId).eq('status', 'Active');
+    const { data: locks, error: loadError } = await client.from('balance_locks').select('id,amount').eq('seller_id', merchant.userId).eq('status', 'Active').order('created_at', { ascending: true });
+    if (loadError) { setBusy(false); return setMessage(loadError.message); }
+    const lockedAmount = (locks || []).reduce((total, lock) => total + Number(lock.amount || 0), 0);
+    if (requestedAmount > lockedAmount) { setBusy(false); return setMessage(`You can unfreeze up to $${lockedAmount.toFixed(2)}.`); }
+    let remainingToRelease = requestedAmount;
+    let error = null;
+    for (const lock of locks || []) {
+      if (remainingToRelease <= 0 || error) break;
+      const lockAmount = Number(lock.amount || 0);
+      const released = Math.min(lockAmount, remainingToRelease);
+      const remainingLockAmount = Math.round((lockAmount - released) * 100) / 100;
+      const result = remainingLockAmount === 0
+        ? await client.from('balance_locks').update({ status: 'Released', released_at: new Date().toISOString() }).eq('id', lock.id)
+        : await client.from('balance_locks').update({ amount: remainingLockAmount }).eq('id', lock.id);
+      error = result.error;
+      remainingToRelease = Math.round((remainingToRelease - released) * 100) / 100;
+    }
     setBusy(false);
     if (error) return setMessage(error.message);
     onChanged?.(); onClose();
@@ -168,6 +194,6 @@ export default function MerchantFinanceModals({ client, merchant, action: reques
     {action === 'Logs' && <section className="merchant-finance-modal logs"><header><div><h3>Logs — {merchant.email}</h3></div><button type="button" onClick={onClose}>×</button></header><div className="merchant-log-tools"><select value={logCurrency} onChange={(event) => setLogCurrency(event.target.value)}><option>USD</option><option>EUR</option><option>GBP</option><option>CNY</option></select><select value={logType} onChange={(event) => setLogType(event.target.value)}><option value="All">Type</option><option>Admin Credit</option><option>Admin Debit</option><option>Agent Credit</option><option>Agent Debit</option><option>Order</option><option>Withdrawal</option></select><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /><button type="button" onClick={loadLogs}>Search</button></div><div className="merchant-log-results">{filteredLogs.map((item) => <article key={item.id}><time>{new Date(item.created_at).toLocaleString()}</time><strong>{item.type}</strong><span>{item.note || '—'}</span><b className={Number(item.amount) >= 0 ? 'credit' : 'debit'}>{Number(item.amount) >= 0 ? '+' : ''}{logCurrency} {Number(item.amount).toFixed(2)}</b></article>)}{!filteredLogs.length && <p>No transactions found.</p>}</div><footer><button type="button" onClick={onClose}>Close</button></footer></section>}
     {action === 'Payment' && <section className="merchant-finance-modal merchant-withdrawals"><header><div><h3>Merchant Withdrawal Requests</h3><p>{merchant.email}</p></div><button type="button" onClick={onClose}>×</button></header>{message && <p className={message.includes('approved') || message.includes('rejected') ? 'merchant-modal-success' : 'merchant-modal-error'}>{message}</p>}{loadingWithdrawals ? <p className="merchant-withdraw-empty">Loading withdrawal requests…</p> : <div className="merchant-withdraw-list">{withdrawals.map((withdrawal) => <article key={withdrawal.id}><div><strong>${Number(withdrawal.amount || 0).toFixed(2)}</strong><span>{withdrawal.method || 'Payment method'} · {withdrawal.account_details || 'No account details'}</span><time>{new Date(withdrawal.created_at).toLocaleString()}</time>{withdrawal.rejection_reason && <small>{withdrawal.rejection_reason}</small>}</div><em className={String(withdrawal.status || '').toLowerCase()}>{withdrawal.status}</em>{withdrawal.status === 'Pending' && <span className="merchant-withdraw-actions"><button type="button" disabled={busy} onClick={() => approveWithdrawal(withdrawal)}>✓ Accept</button><button type="button" disabled={busy} onClick={() => { setRejectingWithdrawal(withdrawal); setRejectionReason(''); }}>× Reject</button></span>}</article>)}{!withdrawals.length && <p className="merchant-withdraw-empty">No withdrawal requests from this merchant.</p>}</div>}{rejectingWithdrawal && <form className="merchant-withdraw-reject" onSubmit={rejectWithdrawal}><label>REJECTION REASON <small>(optional)</small><textarea autoFocus value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Optional reason for rejecting this withdrawal" /></label><footer><button type="button" disabled={busy} onClick={() => setRejectingWithdrawal(null)}>Cancel</button><button type="submit" disabled={busy}>Confirm Reject</button></footer></form>}<footer><button type="button" onClick={onClose}>Close</button></footer></section>}
     {action === 'Freeze' && <form className="merchant-finance-modal compact" onSubmit={saveFreeze}><header><div><h3>Freeze Balance</h3><p>{merchant.email}</p></div><button type="button" onClick={onClose}>×</button></header><div className="merchant-available"><span>Available</span><strong>{merchant.balance || '$0.00'}</strong></div><label>Amount to Freeze<input type="number" min="0.01" step="0.01" required placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Remark<input placeholder="Reason for freeze (optional)" value={remark} onChange={(event) => setRemark(event.target.value)} /></label>{message && <p className="merchant-modal-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" className="lock-confirm" disabled={busy}>Freeze Balance</button></footer></form>}
-    {action === 'Unfreeze' && <form className="merchant-finance-modal compact" onSubmit={saveUnfreeze}><header><div><h3>Unfreeze Balance</h3><p>{merchant.email}</p></div><button type="button" onClick={onClose}>×</button></header><p>This will release all active balance locks for this seller.</p>{message && <p className="merchant-modal-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={busy}>Unfreeze Balance</button></footer></form>}
+    {action === 'Unfreeze' && <form className="merchant-finance-modal compact" onSubmit={saveUnfreeze}><header><div><h3>Unfreeze Balance</h3><p>{merchant.email}</p></div><button type="button" onClick={onClose}>×</button></header><div className="merchant-available"><span>Currently Frozen</span><strong>${activeLockAmount.toFixed(2)}</strong></div><label>Amount to Unfreeze<input type="number" min="0.01" max={activeLockAmount || undefined} step="0.01" required placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><p>Enter the portion of the frozen balance to release.</p>{message && <p className="merchant-modal-error">{message}</p>}<footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={busy || activeLockAmount <= 0}>{busy ? 'Unfreezing…' : 'Unfreeze Balance'}</button></footer></form>}
   </div>;
 }
