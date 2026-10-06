@@ -10,7 +10,11 @@ security definer
 set search_path = public, auth, extensions
 as $$
 begin
-  if not public.is_admin() then
+  -- Check the caller directly instead of relying on an older installed
+  -- is_admin() helper, which may not match the current profile policy.
+  if auth.uid() is null or not exists (
+    select 1 from public.profiles where id = auth.uid() and role = 'admin'
+  ) then
     raise exception 'Administrator access required.';
   end if;
   if length(coalesce(new_password, '')) < 6 or length(new_password) > 72 then
