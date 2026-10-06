@@ -3,7 +3,7 @@
 create extension if not exists pgcrypto with schema extensions;
 
 alter table public.profiles add column if not exists trade_password_hash text;
-alter table public.wallet_transactions add column if not exists order_id bigint references public.orders(id) on delete restrict;
+alter table public.wallet_transactions add column if not exists order_id uuid references public.orders(id) on delete restrict;
 create unique index if not exists wallet_transactions_one_order_debit
   on public.wallet_transactions(order_id)
   where type = 'Order Debit';

@@ -52,6 +52,7 @@ begin
   -- Only the first transition into Completed creates a credit. The unique
   -- index provides a second safety net for retries and concurrent requests.
   if normalized_status = 'Completed' and lower(trim(target_order.status)) <> 'completed' then
+    -- Credit the completed order's full sale value: cost price plus profit.
     settlement_amount := round(target_order.sell_price * target_order.quantity, 2);
     insert into public.wallet_transactions (seller_id, type, amount, note, order_id)
     values (
