@@ -27,7 +27,11 @@ export default function App() {
     const client = isSellerPortal ? sellerSupabase : isAgentPortal ? agentSupabase : adminSupabase;
     const validateAdminSession = async (session) => {
       if (!session) return false;
-      const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+      const { data: profile, error } = await adminSupabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+      // Keep an authenticated admin session during a temporary network or
+      // database lookup failure. We only sign out when a profile is returned
+      // and it definitively is not an admin account.
+      if (error) return true;
       const canAccess = profile?.role?.toLowerCase() === 'admin';
       if (!canAccess) await adminSupabase.auth.signOut();
       return canAccess;
